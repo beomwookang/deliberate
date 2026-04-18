@@ -56,3 +56,44 @@ cd ui && pnpm lint && pnpm typecheck
 - Config: pydantic-settings for env-driven config. .env.example with all variables.
 - All reserved/inert fields present: application_id (default 'default'), acting_for (null), ooo_* fields, delegation_reason, backup_delegate in policy schema.
 - Next.js version: specified 14 per user constraint. Latest is 15+ but user explicitly said 14.
+
+### Session 2 — 2026-04-19 — Milestone M1 complete
+
+#### What's implemented
+- **SDK (Phase 1):** `@approval_gate` decorator with transparent `config` injection for thread_id. `DeliberateClient` with async httpx: submit_interrupt, poll_status, wait_for_decision (2s interval, configurable timeout), submit_resume_ack. Custom exceptions: `DeliberateTimeoutError`, `DeliberateServerError`. 23 unit tests.
+- **Server (Phase 2+3):** All 8 endpoints implemented:
+  - `POST /interrupts` — API key auth (SHA-256 hash comparison), payload validation against SDK's `InterruptPayload`, transactional interrupt+approval creation
+  - `GET /approvals/{id}/status` — polling endpoint, returns decision details when decided
+  - `GET /approvals/{id}/payload` — fetch interrupt data for UI rendering
+  - `POST /approvals/{id}/decide` — decision with HMAC signature, ledger entry with SHA-256 content hash
+  - `POST /approvals/{id}/resume-ack` — updates ledger with resume status/latency
+  - `GET /ledger` — query by thread_id with JSONB path filter
+  - Auth utilities: JWT tokens (HS256, jti/aud/iat/exp claims), API key hashing, content hash, HMAC signing
+  - 25 server tests against real Postgres (NullPool for test isolation)
+- **UI (Phase 4):** Approval page at `/a/[approval_id]` as async Server Component. Server-side fetch via `INTERNAL_API_URL`. `FinancialDecisionLayout` with amount card, customer info, agent reasoning, evidence table. `DecisionForm` client component with 4 decision buttons, rationale chips, notes, review_duration_ms measurement.
+- **Example agent (Phase 5):** Three-node LangGraph graph (classify → approve_refund → process_refund). Runnable with `python agent.py`.
+- **Integration test (Phase 6):** Full M1 flow test: interrupt → status(pending) → payload → decide → status(decided) → resume-ack → ledger query → content hash verification → 409 on double-decide.
+
+#### Key decisions made during M1
+- **SDK blocking poll, not LangGraph interrupt():** For M1, the `@approval_gate` decorator blocks the graph thread synchronously (submit → poll → return). It does NOT use LangGraph's `interrupt()` / `Command(resume=...)`. This is acceptable for M1; true graph pause/resume semantics can come in M2+.
+- **Server depends on SDK for shared types:** `deliberate.types.InterruptPayload` is imported by the server. No type duplication. May refactor to `deliberate-core` package if circular issues arise.
+- **Approval URLs use raw approval_id (UUID):** No signed JWT tokens in URLs for M1. UUID entropy (128 bits) is adequate. M2 will replace with signed tokens per PRD §6.6.
+- **SECRET_KEY required, no default:** Server fails to start if SECRET_KEY is empty. No dev default.
+- **NullPool for tests:** Server tests use `sqlalchemy.pool.NullPool` to avoid asyncpg connection pool state leaking between test functions.
+- **Server Dockerfile uses repo root as build context:** Because the server imports the SDK package, the Dockerfile COPYs both `sdk/` and `server/` from the repo root.
+- **LangGraph 0.4.10 verified:** Thread ID accessed via `config["configurable"]["thread_id"]`. Public API only (`langgraph.types.interrupt`, `langgraph.types.Command`).
+
+#### M1 decisions deferred to M2
+- Approval URLs use raw approval_id. M2 will replace with signed JWT tokens per PRD §6.6.
+- No notifications (Slack, Email, Webhook) — approver URL copied from logs.
+- No policy engine — single approver from `DEFAULT_APPROVER_EMAIL` env var.
+- No timeout worker — approvals sit forever if ignored.
+- Approver identity: `anonymous@deliberate.dev` hardcoded in DecisionForm. M2 adds magic link / OAuth.
+- SDK blocking poll may move to true `interrupt()` / `Command(resume=...)` pattern.
+- Server mypy --strict not fully passing due to mixed imports; address in M2.
+- `deliberate-core` package extraction if SDK↔server coupling causes issues.
+
+#### Known TODOs in code
+- `sdk/src/deliberate/client.py:75` — `TODO(M2): Replace with signed token per PRD §6.6`
+- `server/src/deliberate_server/api/routes/approvals.py:100` — `TODO(M2): Replace with signed token per PRD §6.6`
+- `ui/app/a/[approval_id]/page.tsx:15` — `TODO(M2): Replace with signed token per PRD §6.6`

@@ -5,14 +5,18 @@ WORKDIR /app
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy project files
-COPY pyproject.toml .
-COPY src/ src/
-COPY alembic/ alembic/
-COPY alembic.ini .
+# Copy SDK (shared types)
+COPY sdk/ /sdk
+RUN uv pip install --system /sdk
 
-# Install dependencies
-RUN uv pip install --system -e ".[dev]"
+# Copy server project files
+COPY server/pyproject.toml .
+COPY server/src/ src/
+COPY server/alembic/ alembic/
+COPY server/alembic.ini .
+
+# Install server dependencies
+RUN uv pip install --system -e .
 
 # Default command: run the server
 CMD ["python", "-m", "deliberate_server.main"]
