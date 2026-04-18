@@ -26,7 +26,9 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql+asyncpg://deliberate:deliberate@postgres:5432/deliberate
-      SECRET_KEY: ${SECRET_KEY:-dev-secret-change-in-production}
+      SECRET_KEY: ${SECRET_KEY}
+      DEFAULT_APPROVER_EMAIL: ${DEFAULT_APPROVER_EMAIL:-approver@example.com}
+      UI_URL: http://localhost:3000
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -45,14 +47,16 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql+asyncpg://deliberate:deliberate@postgres:5432/deliberate
-      SECRET_KEY: ${SECRET_KEY:-dev-secret-change-in-production}
+      SECRET_KEY: ${SECRET_KEY}
+      DEFAULT_APPROVER_EMAIL: ${DEFAULT_APPROVER_EMAIL:-approver@example.com}
     command: ["python", "-m", "deliberate_server.worker"]
 
   ui:
     build:
       context: ./ui
     environment:
-      NEXT_PUBLIC_API_URL: http://server:4000
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      INTERNAL_API_URL: http://server:4000
     ports:
       - "3000:3000"
     depends_on:
