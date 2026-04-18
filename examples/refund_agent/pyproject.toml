@@ -10,5 +10,6 @@ license = "MIT"
 requires-python = ">=3.11"
 dependencies = [
     "deliberate",
-    "langgraph>=0.2,<1",
+    "langgraph>=0.3,<0.5",
+    "langgraph-checkpoint-sqlite>=2,<3",
 ]
