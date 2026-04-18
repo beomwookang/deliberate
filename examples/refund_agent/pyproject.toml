@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "deliberate-refund-example"
+version = "0.0.1"
+description = "Reference LangGraph agent using the Deliberate SDK"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "deliberate",
+    "langgraph>=0.2,<1",
+]
