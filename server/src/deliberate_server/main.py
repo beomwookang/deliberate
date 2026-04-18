@@ -1,16 +1,35 @@
-"""FastAPI application entry point.
+"""FastAPI application entry point."""
 
-Currently only serves the health endpoint. Route stubs for interrupts,
-approvals, and ledger exist as empty modules in api/routes/.
-"""
+from __future__ import annotations
+
+import logging
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from deliberate_server.api.routes.approvals import router as approvals_router
+from deliberate_server.api.routes.interrupts import router as interrupts_router
+from deliberate_server.api.routes.ledger import router as ledger_router
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
 app = FastAPI(
     title="Deliberate",
     description="The approval layer for LangGraph agents",
     version="0.0.1",
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(interrupts_router)
+app.include_router(approvals_router)
+app.include_router(ledger_router)
 
 
 @app.get("/health")
