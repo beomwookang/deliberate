@@ -12,6 +12,35 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+class DeliberateError(Exception):
+    """Base exception for Deliberate SDK errors."""
+
+
+class DeliberateTimeoutError(DeliberateError):
+    """Raised when client-side polling exceeds the configured timeout.
+
+    This means the SDK gave up waiting — the approval may still be pending
+    on the server. Check the Deliberate UI or server logs for status.
+    """
+
+    def __init__(self, approval_id: str, timeout_seconds: int) -> None:
+        self.approval_id = approval_id
+        self.timeout_seconds = timeout_seconds
+        super().__init__(
+            f"Timed out after {timeout_seconds}s waiting for approval {approval_id}. "
+            "The approval may still be pending on the server."
+        )
+
+
+class DeliberateServerError(DeliberateError):
+    """Raised when the Deliberate server returns an error."""
+
+    def __init__(self, status_code: int, detail: str) -> None:
+        self.status_code = status_code
+        self.detail = detail
+        super().__init__(f"Server error {status_code}: {detail}")
+
+
 class MoneyAmount(BaseModel):
     """Monetary amount with currency code (PRD §5.1)."""
 

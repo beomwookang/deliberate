@@ -28,7 +28,7 @@ dependencies = [
 
 [project.optional-dependencies]
 langgraph = [
-    "langgraph>=0.2,<1",
+    "langgraph>=0.3,<0.5",
 ]
 dev = [
     "pytest>=8,<9",

@@ -1,13 +1,29 @@
 """Deliberate — The approval layer for LangGraph agents."""
 
+from deliberate.client import DeliberateClient
 from deliberate.decorator import approval_gate
-from deliberate.types import DecisionOption, Evidence, InterruptPayload, LedgerEntry, MoneyAmount
+from deliberate.types import (
+    Decision,
+    DecisionOption,
+    DeliberateError,
+    DeliberateServerError,
+    DeliberateTimeoutError,
+    Evidence,
+    InterruptPayload,
+    LedgerEntry,
+    MoneyAmount,
+)
 
 __all__ = [
-    "approval_gate",
+    "DeliberateClient",
+    "Decision",
     "DecisionOption",
+    "DeliberateError",
+    "DeliberateServerError",
+    "DeliberateTimeoutError",
     "Evidence",
     "InterruptPayload",
     "LedgerEntry",
     "MoneyAmount",
+    "approval_gate",
 ]
