@@ -26,6 +26,9 @@ out/
 # IDE
 .idea/
 .vscode/
+
+# OMC plugin state
+.omc/
 *.swp
 *.swo
 

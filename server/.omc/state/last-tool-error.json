@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"uv run ruff check src/ tests/ 2>&1 && uv run ruff format --check src/ tests/ 2>&1 && echo \\\"--- ruff OK ---\\\" && uv run mypy src/ 2>&1 && echo \\\"--- mypy OK ---\\\" && uv run pytest -v 2>&1\"...",
-  "error": "Exit code 1\nAll checks passed!\n22 files already formatted\n--- ruff OK ---\nsrc/deliberate_server/worker.py:12: error: Skipping analyzing \"apscheduler.schedulers.blocking\": module is installed, but missing library stubs or py.typed marker  [import-untyped]\nsrc/deliberate_server/worker.py:12: note: See https://mypy.readthedocs.io/en/stable/running_mypy.html#missing-imports\nFound 1 error in 1 file (checked 18 source files)",
-  "timestamp": "2026-04-18T16:27:07.600Z",
-  "retry_count": 1
-}

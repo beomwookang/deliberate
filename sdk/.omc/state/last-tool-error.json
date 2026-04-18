@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd /Volumes/SATECHI_SSD/Downloads/Projects/Deliberate/server && uv run ruff check src/ tests/ 2>&1 && uv run ruff format --check src/ tests/ 2>&1 && echo \\\"--- ruff OK ---\\\" && uv run mypy...",
-  "error": "Exit code 1\nAll checks passed!\nWould reformat: src/deliberate_server/db/models.py\nWould reformat: tests/test_models.py\n2 files would be reformatted, 20 files already formatted",
-  "timestamp": "2026-04-18T16:26:45.129Z",
-  "retry_count": 2
-}
