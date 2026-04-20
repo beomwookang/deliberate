@@ -14,6 +14,10 @@ RUN pnpm install --frozen-lockfile || pnpm install
 # Copy source
 COPY . .
 
+# Accept build arg for NEXT_PUBLIC env var (baked into client JS at build time)
+ARG NEXT_PUBLIC_API_URL=http://localhost:4000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 # Build
 RUN pnpm build
 
