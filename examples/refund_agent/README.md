@@ -52,14 +52,14 @@ print(hashlib.sha256(key.encode()).hexdigest())
 
 ```bash
 cd examples/refund_agent
-pip install -e . -e ../../sdk
+uv venv && uv pip install -e ../../sdk "langgraph>=0.3,<0.5"
 
 # Set SDK environment variables
 export DELIBERATE_SERVER_URL=http://localhost:4000
 export DELIBERATE_API_KEY=<your-api-key>
 export DELIBERATE_UI_URL=http://localhost:3000
 
-python agent.py
+uv run python agent.py
 ```
 
 ## What happens
