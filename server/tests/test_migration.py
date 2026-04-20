@@ -4,10 +4,11 @@ from alembic.config import Config
 from alembic.script import ScriptDirectory
 
 
-def test_migration_revision_exists() -> None:
+def test_migration_revisions_exist() -> None:
     config = Config("alembic.ini")
     scripts = ScriptDirectory.from_config(config)
     revisions = list(scripts.walk_revisions())
-    assert len(revisions) == 1
-    assert revisions[0].revision == "0001"
-    assert revisions[0].down_revision is None
+    assert len(revisions) == 2
+    rev_ids = {r.revision for r in revisions}
+    assert "0001" in rev_ids
+    assert "0002" in rev_ids

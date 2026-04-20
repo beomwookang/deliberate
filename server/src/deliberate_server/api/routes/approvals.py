@@ -198,11 +198,7 @@ async def submit_decision(approval_id: uuid.UUID, body: DecideRequest) -> Decide
                 "review_duration_ms": body.review_duration_ms,
             },
             "escalations": [],
-            "resume": {
-                "resumed_at": None,
-                "resume_latency_ms": None,
-                "resume_status": "pending",
-            },
+            "resume": None,
         }
 
         # Compute content hash (excluding signature)
@@ -212,6 +208,22 @@ async def submit_decision(approval_id: uuid.UUID, body: DecideRequest) -> Decide
         # Add hash + signature to the content
         ledger_content["content_hash"] = content_hash
         ledger_content["signature"] = content_signature
+
+        # Validate content against SDK's LedgerEntry schema (D-1 fix)
+        from deliberate.types import LedgerEntry as LedgerEntrySchema
+
+        try:
+            LedgerEntrySchema.model_validate(ledger_content)
+        except Exception as e:
+            logger.error(
+                "CRITICAL: Ledger content failed schema validation for approval %s: %s",
+                approval_id,
+                e,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Internal error: ledger content schema validation failed",
+            ) from e
 
         # Create ledger entry
         ledger_entry = LedgerEntryModel(
