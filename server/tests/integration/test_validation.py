@@ -11,7 +11,6 @@ C7: Client-side polling timeout
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import os
@@ -171,9 +170,7 @@ async def test_c2_content_hash_verifiable(client: AsyncClient, i: int) -> None:
     computed = "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
 
     assert computed == stored_hash, (
-        f"Content hash mismatch for entry {i}.\n"
-        f"  Stored:   {stored_hash}\n"
-        f"  Computed: {computed}"
+        f"Content hash mismatch for entry {i}.\n  Stored:   {stored_hash}\n  Computed: {computed}"
     )
 
 
@@ -338,9 +335,7 @@ async def test_c5_invalid_decision_type(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_c6_large_payload_500kb(client: AsyncClient) -> None:
     """~500KB payload should succeed."""
-    large_evidence = [
-        {"type": "text", "summary": "x" * 5000} for _ in range(100)
-    ]  # ~500KB
+    large_evidence = [{"type": "text", "summary": "x" * 5000} for _ in range(100)]  # ~500KB
     payload = _make_interrupt()
     payload["payload"]["evidence"] = large_evidence
     resp = await client.post("/interrupts", json=payload, headers=API_KEY_HEADER)
@@ -350,9 +345,7 @@ async def test_c6_large_payload_500kb(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_c6_payload_over_1mb(client: AsyncClient) -> None:
     """>1MB payload — PRD §4.3 says reject. Testing if enforced."""
-    large_evidence = [
-        {"type": "text", "summary": "x" * 10000} for _ in range(200)
-    ]  # ~2MB
+    large_evidence = [{"type": "text", "summary": "x" * 10000} for _ in range(200)]  # ~2MB
     payload = _make_interrupt()
     payload["payload"]["evidence"] = large_evidence
     resp = await client.post("/interrupts", json=payload, headers=API_KEY_HEADER)
@@ -372,7 +365,7 @@ async def test_c6_payload_over_1mb(client: AsyncClient) -> None:
 async def test_c7_client_timeout(client: AsyncClient) -> None:
     """SDK timeout raises DeliberateTimeoutError without mutating server state."""
     from deliberate.client import DeliberateClient
-    from deliberate.types import DeliberateTimeoutError, InterruptPayload
+    from deliberate.types import DeliberateTimeoutError
 
     # Submit interrupt via HTTP to get a real approval_id
     resp = await client.post(
@@ -380,37 +373,25 @@ async def test_c7_client_timeout(client: AsyncClient) -> None:
     )
     approval_id = resp.json()["approval_id"]
 
-    # Create a client that polls the real server (via test transport)
-    # We can't easily poll the ASGI transport from the SDK's httpx client,
-    # so test the timeout logic directly
-    sdk_client = DeliberateClient(
-        base_url="http://test",
-        api_key=API_KEY,
-    )
-    # Patch httpx client to use the test transport
-    sdk_client._http = client._transport._client if hasattr(client, "_transport") else None  # type: ignore
-
-    # Test timeout behavior via the existing unit test mechanism
-    from deliberate.types import DeliberateTimeoutError
-
-    # Direct test: wait_for_decision with very short timeout
-    # We know the approval is pending and will never be decided
+    # Create an SDK client with a fresh httpx.AsyncClient using the ASGI transport
     import httpx
 
     from deliberate_server.main import app
 
+    sdk_client = DeliberateClient(base_url="http://test", api_key=API_KEY)
     transport = ASGITransport(app=app)  # type: ignore[arg-type]
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as http:
         sdk_client._http = http
 
         with pytest.raises(DeliberateTimeoutError) as exc_info:
             await sdk_client.wait_for_decision(
-                approval_id=__import__("uuid").UUID(approval_id),
+                approval_id=uuid.UUID(approval_id),
                 timeout_seconds=2,
                 poll_interval_seconds=1,
             )
 
-        assert "timeout" in str(exc_info.value).lower() or "timed out" in str(exc_info.value).lower()
+        err_msg = str(exc_info.value).lower()
+        assert "timeout" in err_msg or "timed out" in err_msg
         assert approval_id in str(exc_info.value)
 
     # Verify server state unchanged

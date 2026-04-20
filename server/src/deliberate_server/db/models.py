@@ -155,7 +155,9 @@ class Approver(Base):
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     email: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
-    ooo_active: Mapped[bool] = mapped_column(Boolean, default=False)  # Reserved for v1.1+
+    ooo_active: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True, server_default=text("FALSE")
+    )  # Reserved for v1.1+
     ooo_from: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )  # Reserved

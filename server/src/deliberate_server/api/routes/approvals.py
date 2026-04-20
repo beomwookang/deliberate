@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -40,8 +40,11 @@ class PayloadResponse(BaseModel):
     payload: dict[str, Any]
 
 
+DecisionType = Literal["approve", "modify", "escalate", "reject"]
+
+
 class DecideRequest(BaseModel):
-    decision_type: str
+    decision_type: DecisionType
     decision_payload: dict[str, Any] | None = None
     rationale_category: str | None = None
     rationale_notes: str | None = None

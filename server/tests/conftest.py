@@ -5,7 +5,6 @@ Tests run against a real Postgres database (docker compose up -d postgres).
 
 from __future__ import annotations
 
-import asyncio
 import os
 from collections.abc import AsyncGenerator
 
@@ -17,7 +16,7 @@ os.environ.setdefault(
     "postgresql+asyncpg://deliberate:deliberate@localhost:5432/deliberate",
 )
 
-import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -30,22 +29,18 @@ from deliberate_server.db.models import Base
 _TEST_DB_URL = settings.database_url
 
 
-# Create tables once at module import (sync)
-def _ensure_tables() -> None:
-    async def _inner() -> None:
-        engine = create_async_engine(_TEST_DB_URL, poolclass=NullPool)
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        await engine.dispose()
+@pytest_asyncio.fixture
+async def client() -> AsyncGenerator[AsyncClient, None]:
+    """Async test client with a fresh NullPool engine per test.
 
-    asyncio.run(_inner())
+    Creates tables if needed, cleans data, seeds default application.
+    """
+    engine = create_async_engine(_TEST_DB_URL, poolclass=NullPool)
 
+    # Create tables + clean + seed in one connection sequence
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
-_ensure_tables()
-
-
-async def _clean_and_seed(engine):  # type: ignore[no-untyped-def]
-    """Delete all rows and seed the default application."""
     async with engine.begin() as conn:
         for tbl in ("ledger_entries", "decisions", "approvals", "interrupts", "approvers"):
             await conn.execute(text(f"DELETE FROM {tbl}"))
@@ -59,15 +54,7 @@ async def _clean_and_seed(engine):  # type: ignore[no-untyped-def]
             {"id": "default", "name": "Default Application", "hash": key_hash},
         )
 
-
-@pytest.fixture
-async def client() -> AsyncGenerator[AsyncClient, None]:
-    """Async test client with a fresh NullPool engine per test."""
-    # NullPool = one fresh connection per checkout, no reuse, no stale state
-    engine = create_async_engine(_TEST_DB_URL, poolclass=NullPool)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-    await _clean_and_seed(engine)
 
     # Patch the app's session factory
     import deliberate_server.db.session as session_module

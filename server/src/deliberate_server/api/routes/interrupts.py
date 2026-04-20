@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json as _json
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -62,6 +63,15 @@ async def submit_interrupt(
 
     if app_row is None:
         raise HTTPException(status_code=401, detail="Invalid API key")
+
+    # Enforce 1MB payload cap (PRD §4.3)
+    payload_size = len(_json.dumps(body.payload).encode())
+    if payload_size > 1_048_576:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Interrupt payload exceeds 1MB limit ({payload_size} bytes). "
+            "Use links to external storage for large artifacts (PRD §4.3).",
+        )
 
     # Validate the payload against InterruptPayload schema
     try:

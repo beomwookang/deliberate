@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "deliberate"
 version = "0.0.1"
 description = "The approval layer for LangGraph agents"
-readme = "../README.md"
+readme = {text = "The approval layer for LangGraph agents. See https://github.com/beomwookang/deliberate", content-type = "text/markdown"}
 license = "MIT"
 requires-python = ">=3.11"
 authors = [
