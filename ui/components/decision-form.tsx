@@ -23,7 +23,7 @@ interface DecisionFormProps {
   rationaleCategories: string[];
 }
 
-type SubmitState = "idle" | "submitting" | "success" | "error";
+type SubmitState = "idle" | "submitting" | "success" | "already_decided" | "error";
 
 const CATEGORY_LABELS: Record<string, string> = {
   product_issue: "Product Issue",
@@ -73,7 +73,7 @@ export function DecisionForm({
       });
 
       if (res.status === 409) {
-        setSubmitState("success");
+        setSubmitState("already_decided");
         return;
       }
 
@@ -99,6 +99,21 @@ export function DecisionForm({
           Decision Submitted
         </h2>
         <p className="text-green-700">You can close this window.</p>
+      </div>
+    );
+  }
+
+  if (submitState === "already_decided") {
+    return (
+      <div className="mt-6 bg-amber-50 border border-amber-200 rounded-lg p-8 text-center">
+        <div className="text-4xl mb-4">&#9888;</div>
+        <h2 className="text-xl font-bold text-amber-800 mb-2">
+          Already Decided
+        </h2>
+        <p className="text-amber-700">
+          This approval has already been decided by another reviewer.
+          Your submission was not recorded.
+        </p>
       </div>
     );
   }
