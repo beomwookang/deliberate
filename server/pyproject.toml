@@ -21,6 +21,9 @@ dependencies = [
     "pydantic-settings>=2.0,<3",
     "apscheduler>=3.10,<4",
     "PyJWT>=2.8,<3",
+    "PyYAML>=6.0,<7",
+    "aiosmtplib>=3.0,<4",
+    "slack-sdk>=3.27,<4",
 ]
 
 [project.optional-dependencies]
@@ -53,6 +56,18 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 module = "apscheduler.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "yaml.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "aiosmtplib.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "slack_sdk.*"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

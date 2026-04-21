@@ -1,0 +1,25 @@
+# Approver directory — who can approve what (PRD §5.2)
+#
+# This file maps approver IDs (used in policies) to real people.
+# Keep this separate from policies so policies can be version-controlled
+# without leaking personal data.
+#
+# Path configurable via DELIBERATE_APPROVERS_FILE env var.
+
+approvers:
+  - id: finance_lead
+    email: priya@acme.com
+    display_name: "Priya Sharma"
+    out_of_office:       # Schema-reserved, inert until v1.1
+      active: false
+      from: null
+      until: null
+      delegate_to: null
+
+  - id: cfo
+    email: cfo@acme.com
+    display_name: "Alex Chen"
+
+groups:
+  - id: finance_team
+    members: [finance_lead, cfo]

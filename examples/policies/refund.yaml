@@ -1,0 +1,38 @@
+# Example policy: refund approval (PRD §5.2)
+#
+# Evaluation is top-to-bottom, first match wins.
+# Expression language: <, >, <=, >=, ==, !=, and, or, not, contains
+# Missing field access evaluates to false (not error).
+
+name: refund_approval
+matches:
+  layout: financial_decision
+  subject_contains: "Refund"
+
+rules:
+  # Auto-approve below threshold — no human needed
+  - name: auto_approve_small
+    when: "amount.value < 100"
+    action: auto_approve
+    rationale: "Below $100 threshold, policy §3.1"
+
+  # Standard amount, any finance team member
+  - name: standard
+    when: "amount.value >= 100 and amount.value < 5000"
+    approvers:
+      any_of: [finance_team]
+      backup_delegate: finance_lead    # v1.1+: auto-route if primary is OOO
+    timeout: 4h
+    on_timeout: escalate
+    escalate_to: finance_lead
+    notify: [email, slack]
+
+  # High value, two-person approval
+  - name: high_value
+    when: "amount.value >= 5000"
+    approvers:
+      all_of: [finance_lead, cfo]
+    timeout: 8h
+    on_timeout: fail
+    require_rationale: true
+    notify: [email, slack, webhook]

@@ -1,0 +1,20 @@
+# Default catch-all policy — mimics M1 behavior.
+#
+# This policy matches any interrupt that doesn't match a more specific policy.
+# It routes to the first approver in the directory, simulating the old
+# DELIBERATE_DEFAULT_APPROVER_EMAIL env var behavior.
+#
+# Replace this with domain-specific policies as your usage grows.
+
+name: default_catch_all
+matches:
+  layout: null            # null = matches any layout
+
+rules:
+  - name: route_to_default
+    when: "true"          # Always matches
+    approvers:
+      any_of: [finance_lead]   # Change to your default approver ID
+    timeout: 24h
+    on_timeout: fail
+    notify: [email]

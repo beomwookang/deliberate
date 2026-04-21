@@ -179,3 +179,48 @@ class Decision(BaseModel):
     decision_payload: dict[str, Any] | None = None
     rationale_category: str | None = None
     rationale_notes: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Approver directory types (PRD §5.2) — shared between SDK and server
+# ---------------------------------------------------------------------------
+
+
+class OutOfOffice(BaseModel):
+    """Out-of-office configuration for an approver. Schema-reserved, inert until v1.1."""
+
+    active: bool = False
+    from_date: datetime | None = Field(None, alias="from")
+    until: datetime | None = None
+    delegate_to: str | None = None
+
+
+class ApproverEntry(BaseModel):
+    """An individual approver in the directory (PRD §5.2)."""
+
+    id: str
+    email: str
+    display_name: str | None = None
+    out_of_office: OutOfOffice = Field(default_factory=OutOfOffice)
+
+
+class ApproverGroup(BaseModel):
+    """A named group of approvers (PRD §5.2)."""
+
+    id: str
+    members: list[str]
+
+
+class ApproverDirectoryConfig(BaseModel):
+    """Top-level structure of approvers.yaml (PRD §5.2)."""
+
+    approvers: list[ApproverEntry] = Field(default_factory=list)
+    groups: list[ApproverGroup] = Field(default_factory=list)
+
+
+class ResolvedApprover(BaseModel):
+    """An approver resolved to concrete email + display name."""
+
+    id: str
+    email: str
+    display_name: str | None = None
