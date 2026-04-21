@@ -1,10 +1,11 @@
 # Deliberate — Product Requirements Document
 
-**Status**: Draft v3 · Pre-1.0 scope
+**Status**: Draft v4 · Pre-1.0 scope
 **Last updated**: April 2026
 **Owner**: Beomwoo Kang
 
 **Changelog**
+- v4 (Apr 2026): Notification adapter details formalized (email/SMTP, webhook/HMAC, Slack DM). Added `notify` field to policy rule schema and `notification_attempts` operational table. Expression evaluator semantics for missing field access and union-type payloads documented. Webhook configuration via `webhooks.yaml`. M2a implementation begins.
 - v3 (Apr 2026): Schema extension for agent_reasoning (structured variant), confidence field added to interrupt payload, audit-mode rendering added to roadmap. Based on M1 human validation findings.
 - v2 (Apr 2026): Five deferred design decisions resolved — Slack UX, delegation, ledger-as-truth, tenant model, LangGraph version support. Schema and data model updated to accommodate near-term additions without migration.
 
@@ -229,6 +230,7 @@ rules:
     timeout: 4h
     on_timeout: escalate
     escalate_to: finance_lead
+    notify: [email, slack]             # Channels to notify approvers through
 
   # High value, two-person approval
   - name: high_value
@@ -238,9 +240,31 @@ rules:
     timeout: 8h
     on_timeout: fail
     require_rationale: true
+    notify: [email, slack, webhook]    # Fan out to all three channels
 ```
 
-Evaluation is top-to-bottom, first match wins. Expression language is intentionally minimal: comparison operators (`<`, `>`, `==`, `!=`), boolean (`and`, `or`, `not`), field access via dot notation, `contains` for strings. No function calls, no loops. If a rule's condition needs more than this, the interrupt payload should be pre-processed by the agent.
+Evaluation is top-to-bottom, first match wins. Expression language is intentionally minimal: comparison operators (`<`, `>`, `<=`, `>=`, `==`, `!=`), boolean (`and`, `or`, `not`), field access via dot notation, `contains` for string membership. No function calls, no loops. If a rule's condition needs more than this, the interrupt payload should be pre-processed by the agent.
+
+**Expression evaluator semantics.** Missing field access (e.g., a dotted path that doesn't resolve to a value in the payload) evaluates to a rule-matching `false` rather than raising an error, allowing policies to work unchanged across payload variants. This is important because some payload fields are union types — for example, `agent_reasoning` may be a plain string or a structured `{summary, points[], confidence?}` object. Concretely:
+
+- `when: "agent_reasoning.confidence == 'low'"` — if `agent_reasoning` is a string (no `.confidence`), the expression evaluates to `false`. The rule doesn't match; evaluation continues to the next rule.
+- `when: "agent_reasoning contains 'fraud'"` — if `agent_reasoning` is a string, standard string `contains`. If it's the structured object, `contains` applies to the `summary` field as a fallback.
+- Any other dotted path that doesn't resolve → `false`, not exception.
+
+**Notification channels.** Each rule may include a `notify` field specifying which channels to use: `email`, `slack`, `webhook`, or any combination. When `webhook` is specified, all active webhooks defined in `/config/webhooks.yaml` fire (fan-out). If `notify` is omitted, the default is `[email]`. Auto-approve rules do not fire notifications.
+
+```yaml
+# /config/webhooks.yaml
+webhooks:
+  - id: teams_integration
+    url: https://hooks.office.com/webhook/...
+    secret_env: TEAMS_WEBHOOK_SECRET   # Secret read from this env var at runtime
+    active: true
+  - id: pagerduty
+    url: https://events.pagerduty.com/...
+    secret_env: PAGERDUTY_WEBHOOK_SECRET
+    active: false                       # Disabled — won't receive notifications
+```
 
 Groups and individual approvers are resolved separately via `deliberate/config/approvers.yaml` — kept separate so policies can be versioned in source control without leaking personal data.
 
@@ -372,12 +396,12 @@ Entries are append-only and immutable once written. Corrections (e.g., an approv
 
 Expression evaluator is a small purpose-built parser (not eval'd Python, not a general expression language). This is deliberate — keeps the surface area small and auditable, and makes it obvious to users what's supported.
 
-**Notification Dispatcher.** Takes a resolved plan and fires notifications. Each channel is a pluggable adapter:
-- **SlackAdapter** — uses Bolt SDK, sends DM or channel message with a "Review" button linking to approval URL.
-- **EmailAdapter** — uses standard SMTP (user-configured). HTML template renders a preview of the decision plus "Review" button.
-- **WebhookAdapter** — POSTs a signed JSON payload to a user-configured URL. User's responsibility to route from there.
+**Notification Dispatcher.** Takes a resolved plan and fires notifications in parallel (`asyncio.gather`). Each channel is a pluggable adapter implementing a common `Notifier` protocol (open for third-party extension post-1.0):
+- **EmailAdapter** — uses `aiosmtplib` for async SMTP. HTML template includes subject, evidence preview, and a "Review and decide" button. Plain-text fallback included. Retries 3x with backoff on connection failure; fails immediately on auth error.
+- **WebhookAdapter** — POSTs a signed JSON payload (`X-Deliberate-Signature: HMAC-SHA256`) to every active webhook in `/config/webhooks.yaml`. Retries 3x with exponential backoff on 5xx; no retry on 4xx. Timeout: 10s per request.
+- **SlackAdapter** — uses `slack_sdk` (not Bolt). Looks up Slack user by approver email via `users.lookupByEmail`, caches for 1h. Sends DM via `conversations.open` + `chat.postMessage` with Block Kit message containing a "Review and decide" button. Gracefully falls back if user not found in Slack (email adapter should still deliver).
 
-All adapters implement a common `Notifier` protocol — open for third-party extension post-1.0.
+Individual channel failures do not block other channels. All notification attempts (success and failure) are recorded in the `notification_attempts` operational table for ops visibility. The dispatcher returns aggregated results to the caller for logging.
 
 **Approval UI (Next.js).** Server-rendered, mobile-first. Routes:
 - `/a/{approval_token}` — approver landing, renders layout-specific component
@@ -469,6 +493,21 @@ CREATE TABLE ledger_entries (
 CREATE INDEX idx_ledger_thread ON ledger_entries(application_id, (content->>'thread_id'));
 CREATE INDEX idx_ledger_created ON ledger_entries(application_id, created_at DESC);
 
+-- Notification delivery tracking (operational, not part of canonical ledger)
+CREATE TABLE notification_attempts (
+    id              UUID PRIMARY KEY,
+    application_id  TEXT NOT NULL REFERENCES applications(id) DEFAULT 'default',
+    approval_id     UUID NOT NULL REFERENCES approvals(id),
+    channel         TEXT NOT NULL,          -- email, webhook, slack
+    approver_email  TEXT NOT NULL,
+    success         BOOLEAN NOT NULL,
+    message_id      TEXT,                   -- Channel-specific tracking ID
+    error           TEXT,
+    duration_ms     INT,
+    attempted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_notifications_approval ON notification_attempts(application_id, approval_id);
+
 -- Approver directory with reserved OOO fields (v1.1+)
 CREATE TABLE approvers (
     id                      TEXT PRIMARY KEY,       -- "finance_lead"
@@ -485,6 +524,7 @@ Notes:
 - **Canonical vs operational.** `ledger_entries.content` (JSON per §5.3) is the canonical business record. `interrupts`, `approvals`, and `decisions` are operational projections — they exist for query performance and the running state machine. A compliance export always serializes from `ledger_entries.content`.
 - **Escalation vs delegation.** `approvals.escalated_to` handles timeout-driven handoff (documented in §6.2). `approvals.acting_for` + `approvals.delegation_reason` are reserved for v1.1+ to capture OOO-driven substitution. These are distinct concepts: escalation is reactive (approver didn't respond), delegation is proactive (approver arranged coverage in advance).
 - **Transactionality.** All writes are transactional: interrupt → approval creation → notification → (eventually) decision → ledger entry. Partial failure (e.g., notification fails) is recoverable because the approval record exists with `status='pending'`.
+- **Notification tracking.** `notification_attempts` is an operational table — not part of the canonical ledger. It exists for ops visibility (which channels succeeded, which failed, latency) and debugging. The ledger entry records `approval.channel` (which channel the approver was notified through) but not the full delivery log. Notification failures are non-fatal: a failed Slack DM doesn't block email delivery or prevent the approval from proceeding.
 - **Tenant boundary.** `application_id` is present on every table that carries business data, defaulted to `'default'` in v1.0. In v1.5+, a higher-level `organizations` concept will introduce the real tenant boundary; `applications` will become children of organizations. All current indexes already lead with `application_id` for this reason.
 
 ### 6.4 Flow: interrupt to resume
@@ -603,14 +643,23 @@ Kubernetes Helm chart is planned for v1.1.
 
 ### M2 — First-use ready (end of week 4)
 
-- Slack notification adapter shipping with OAuth flow
-- SMTP email notification adapter
-- YAML policy engine with the expression subset specified in §5.2
+M2 is split into sub-milestones:
+
+**M2a — Policy engine + Notification adapters:**
+- 🚧 YAML policy engine with expression evaluator per §5.2 (auto-approve, any_of, all_of)
+- 🚧 Approver directory (`approvers.yaml`) with hot-reload
+- 🚧 SMTP email notification adapter with HTML templates
+- 🚧 Webhook notification adapter with HMAC-SHA256 signing
+- 🚧 Slack DM notification adapter (private app install, no inline approval)
+- 🚧 Notification dispatcher with parallel delivery and `notification_attempts` table
+
+**M2b — Timeout worker + Additional layouts:**
 - Timeout worker implementing timeout and single-level escalation
 - Two additional layouts (document_review, procedure_signoff)
-- Quickstart documentation with 15-minute install-to-first-approval target
 
-Release as `v0.1.0` on PyPI and Docker Hub. Announce on LangGraph Discord, relevant Reddit subs, and Hacker News (Show HN).
+**M2c — Quickstart + Release:**
+- Quickstart documentation with 15-minute install-to-first-approval target
+- Release as `v0.1.0` on PyPI and Docker Hub. Announce on LangGraph Discord, relevant Reddit subs, and Hacker News (Show HN).
 
 ### M3 — Ledger and audit (end of week 8)
 
