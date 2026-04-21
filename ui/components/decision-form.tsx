@@ -9,7 +9,14 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+// Derive API URL from the browser's current hostname so it works from
+// any access path: localhost, LAN IP, or port-forwarded remote.
+function getApiUrl(): string {
+  if (typeof window !== "undefined") {
+    return `http://${window.location.hostname}:4000`;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+}
 
 interface DecisionOption {
   type: string;
@@ -58,7 +65,7 @@ export function DecisionForm({
     const reviewDurationMs = Date.now() - loadTime.current;
 
     try {
-      const res = await fetch(`${API_URL}/approvals/${approvalId}/decide`, {
+      const res = await fetch(`${getApiUrl()}/approvals/${approvalId}/decide`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
