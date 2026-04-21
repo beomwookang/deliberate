@@ -333,33 +333,297 @@ docker compose restart server
 
 ## 5 — Dogfooding (며칠, 시간 될 때)
 
-**목적**: refund agent가 아닌 **당신의 실제 워크플로우**에 Deliberate를 붙여보기
+**목적**: refund agent가 아닌 **당신의 실제 워크플로우**에 Deliberate를 붙여보기.
+LangGraph를 몰라도 됩니다. 아래에 복사-붙여넣기로 만들 수 있는 완전한 예제가 있습니다.
 
 ### 아이디어
 - 채널톡 자동 응답 → 전송 전 검토
 - Enkostay 게스트 문의 자동 답변 → 전송 전 확인
 - 블로그 글 AI 생성 → 발행 전 검토
+- 이메일 초안 → 전송 전 approve
 
-### 방법
+### 설치 (한 번만)
 
-1. 작은 LangGraph 에이전트 하나 만들기 (10줄이면 됨):
-```python
-@approval_gate(layout="financial_decision")
-def review_response(state):
-    return {
-        "subject": f"CS 응답 검토: {state['customer_name']}",
-        "agent_reasoning": state["draft_response"],
-        "evidence": [{"type": "context", "summary": state["original_question"]}],
-    }
+```bash
+cd examples/refund_agent
+# 이미 venv이 있으면 스킵
+uv venv && uv pip install -e ../../sdk "langgraph>=0.3,<0.5"
 ```
 
-2. 5~10회 실사용
+### 예제: CS 응답 검토 에이전트
+
+아래 파일을 `examples/refund_agent/dogfood.py`로 저장하세요.
+LangGraph의 핵심 구조는 3가지뿐입니다:
+- **State**: 데이터를 담는 딕셔너리 (TypedDict)
+- **Node**: State를 받아서 수정하는 함수
+- **Graph**: 노드를 연결해서 실행 순서를 정하는 것
+
+```python
+"""Dogfooding 에이전트 — CS 응답 검토.
+
+사용법:
+    export DELIBERATE_SERVER_URL=http://localhost:4000
+    export DELIBERATE_API_KEY=SmZ-5ETlbm4v-sGgwSd33SE2VMbBbxxdQt0dvR2U8hs
+    export DELIBERATE_UI_URL=http://localhost:3000
+    uv run python dogfood.py
+"""
+
+from __future__ import annotations
+
+import uuid
+from typing import Any, TypedDict
+
+from langgraph.graph import END, StateGraph
+
+from deliberate import approval_gate
+
+
+# ================================================================
+# 1단계: State 정의 — 에이전트가 다루는 데이터 구조
+# ================================================================
+
+class ReviewState(TypedDict):
+    # 입력
+    customer_name: str
+    original_question: str
+    # AI가 생성한 응답 초안
+    draft_response: str
+    # 승인 결과 (Deliberate가 채워줌)
+    decision: dict[str, Any] | None
+
+
+# ================================================================
+# 2단계: 노드(함수) 정의 — 각각이 하나의 "작업 단계"
+# ================================================================
+
+def generate_response(state: ReviewState) -> dict[str, Any]:
+    """AI가 CS 응답을 생성하는 단계.
+    
+    실제로는 여기서 OpenAI/Claude API를 호출하겠지만,
+    dogfooding에서는 하드코딩된 응답을 사용합니다.
+    """
+    # TODO: 실제 use case에서는 LLM 호출
+    draft = (
+        f"안녕하세요 {state['customer_name']}님,\n\n"
+        f"문의하신 내용 확인했습니다: \"{state['original_question']}\"\n\n"
+        f"확인 결과, 해당 건은 처리 가능합니다. "
+        f"추가 문의사항이 있으시면 말씀해주세요.\n\n"
+        f"감사합니다."
+    )
+    print(f"[AI] 응답 초안 생성 완료 ({len(draft)}자)")
+    return {"draft_response": draft}
+
+
+@approval_gate(layout="financial_decision")
+def review_response(state: ReviewState) -> dict[str, Any]:
+    """사람이 검토하는 단계.
+    
+    이 함수가 반환하는 dict가 승인 페이지에 표시됩니다.
+    @approval_gate가 나머지를 처리: 서버 전송 → 대기 → 결과 반환.
+    """
+    return {
+        "subject": f"CS 응답 검토: {state['customer_name']}",
+        # amount는 없어도 됨 (financial_decision 레이아웃에서 선택사항)
+        "customer": {
+            "id": state["customer_name"],
+            "display_name": state["customer_name"],
+        },
+        # agent_reasoning에 초안 응답을 넣으면 검토자가 볼 수 있음
+        "agent_reasoning": state["draft_response"],
+        # evidence에 원본 문의를 넣음
+        "evidence": [
+            {
+                "type": "customer_inquiry",
+                "id": None,
+                "summary": state["original_question"],
+                "url": None,
+            },
+        ],
+        # 이 use case에 맞는 rationale 카테고리
+        "rationale_categories": [
+            "appropriate",      # 적절한 응답
+            "needs_revision",   # 수정 필요
+            "wrong_tone",       # 톤 부적절
+            "factual_error",    # 사실 오류
+        ],
+    }
+
+
+def send_response(state: ReviewState) -> dict[str, Any]:
+    """승인된 응답을 전송하는 단계."""
+    decision = state.get("decision")
+    if not decision:
+        print("[!] 결정 없음 — 전송 스킵")
+        return {}
+
+    decision_type = decision.get("decision_type", "unknown")
+
+    if decision_type == "approve":
+        print(f"\n{'='*50}")
+        print(f"응답 전송 완료!")
+        print(f"  고객: {state['customer_name']}")
+        print(f"  응답: {state['draft_response'][:80]}...")
+        print(f"  판정: {decision_type}")
+        print(f"  사유: {decision.get('rationale_category', 'N/A')}")
+        print(f"{'='*50}\n")
+    elif decision_type == "reject":
+        print(f"\n[X] 응답 거부됨 — 전송하지 않음")
+        print(f"    사유: {decision.get('rationale_notes', 'N/A')}")
+    else:
+        print(f"\n[?] 판정: {decision_type}")
+        print(f"    사유: {decision.get('rationale_notes', 'N/A')}")
+
+    return {}
+
+
+# ================================================================
+# 3단계: 그래프 구성 — 노드를 연결
+# ================================================================
+
+def should_send(state: ReviewState) -> str:
+    """승인됐으면 전송, 아니면 종료."""
+    if state.get("decision"):
+        return "send_response"
+    return END
+
+
+def build_graph() -> StateGraph:
+    graph = StateGraph(ReviewState)
+
+    # 노드 등록
+    graph.add_node("generate_response", generate_response)
+    graph.add_node("review_response", review_response)
+    graph.add_node("send_response", send_response)
+
+    # 실행 순서: generate → review → (조건) → send 또는 END
+    graph.set_entry_point("generate_response")
+    graph.add_edge("generate_response", "review_response")
+    graph.add_conditional_edges("review_response", should_send)
+    graph.add_edge("send_response", END)
+
+    return graph
+
+
+# ================================================================
+# 4단계: 실행
+# ================================================================
+
+def main() -> None:
+    print("\n" + "="*50)
+    print("Dogfooding — CS 응답 검토 에이전트")
+    print("="*50 + "\n")
+
+    graph = build_graph()
+    app = graph.compile()
+
+    # -------------------------------------------------------
+    # 여기를 바꿔서 실제 use case 테스트!
+    # -------------------------------------------------------
+    initial_state: ReviewState = {
+        "customer_name": "김민지",
+        "original_question": "예약한 숙소 체크인 시간을 변경할 수 있나요?",
+        "draft_response": "",  # generate_response가 채울 것
+        "decision": None,
+    }
+
+    thread_id = str(uuid.uuid4())
+    config = {"configurable": {"thread_id": thread_id}}
+
+    print(f"고객: {initial_state['customer_name']}")
+    print(f"문의: {initial_state['original_question']}")
+    print(f"Thread: {thread_id}\n")
+
+    result = app.invoke(initial_state, config=config)
+
+    print("\n에이전트 완료.")
+    if result.get("decision"):
+        print(f"최종 판정: {result['decision'].get('decision_type', 'unknown')}")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+### 실행 방법
+
+```bash
+cd examples/refund_agent
+
+# 환경변수 (매번 필요)
+export DELIBERATE_SERVER_URL=http://localhost:4000
+export DELIBERATE_API_KEY=SmZ-5ETlbm4v-sGgwSd33SE2VMbBbxxdQt0dvR2U8hs
+export DELIBERATE_UI_URL=http://localhost:3000
+
+# 실행
+uv run python dogfood.py
+```
+
+출력:
+```
+Dogfooding — CS 응답 검토 에이전트
+고객: 김민지
+문의: 예약한 숙소 체크인 시간을 변경할 수 있나요?
+
+[AI] 응답 초안 생성 완료 (142자)
+
+[DELIBERATE] Approval needed: http://localhost:3000/a/xxxxx
+```
+
+→ URL을 브라우저에서 열면 승인 페이지가 나옴
+→ AI 초안 응답이 "Agent Reasoning" 영역에 표시됨
+→ 원본 문의가 "Evidence" 테이블에 표시됨
+→ Approve/Reject 결정
+
+### 커스터마이징 포인트
+
+코드에서 바꿀 수 있는 부분:
+
+| 바꿀 것 | 위치 | 예시 |
+|---------|------|------|
+| 고객명/문의 내용 | `main()` 안의 `initial_state` | 실제 CS 문의로 교체 |
+| AI 응답 생성 | `generate_response()` | OpenAI API 호출로 교체 |
+| 승인 페이지에 표시할 정보 | `review_response()` 안의 return dict | 필드 추가/변경 |
+| 판정 카테고리 | `rationale_categories` 리스트 | 도메인에 맞게 변경 |
+| 승인 후 동작 | `send_response()` | 실제 메시지 전송 API 호출 |
+
+### 5~10회 실사용 시나리오
+
+매번 `initial_state`의 문의 내용을 바꿔서 실행:
+
+```python
+# 시나리오 1
+"original_question": "예약한 숙소 체크인 시간을 변경할 수 있나요?",
+
+# 시나리오 2
+"original_question": "환불 규정이 어떻게 되나요? 내일 체크인인데 취소하고 싶어요",
+
+# 시나리오 3
+"original_question": "숙소에 주차장이 있나요? 반려동물 동반도 가능한가요?",
+
+# 시나리오 4
+"original_question": "에어컨이 안 돼요. 지금 너무 더운데 어떻게 해야 하나요?",
+
+# 시나리오 5
+"original_question": "조식 포함인가요? 근처에 맛집 추천해주세요",
+```
 
 ### 기록할 것
-- `financial_decision` 레이아웃이 이 use case에 맞는가?
-- Payload에 넣고 싶은데 없는 필드?
-- rationale_categories가 안 맞으면 어떤 게 필요한가?
-- "실제로 매일 쓸 것 같나?" (솔직하게)
+
+각 시나리오마다:
+
+1. **레이아웃 적합성**: `financial_decision` 레이아웃이 CS 응답 검토에 맞는가?
+   - "Amount" 카드가 나오는가? (없으면 안 나옴 — OK)
+   - "Agent Reasoning"에 AI 초안이 잘 보이는가?
+   - 빠져있는 정보가 있는가? (예: 응답 수정 기능, 원본 대화 맥락)
+
+2. **카테고리 적합성**: `appropriate`, `needs_revision`, `wrong_tone`, `factual_error`가 실제 판단에 맞는가?
+   - 없는 카테고리가 필요한가?
+   - 너무 많은가?
+
+3. **실용성 판단** (가장 중요):
+   - "이 워크플로우를 실제로 매일 쓸 것 같은가?"
+   - "Slack에서 바로 확인하는 게 나을까, 이 UI가 나을까?"
+   - "이 검토 과정이 응답 품질을 실제로 올릴까?"
 
 ---
 
