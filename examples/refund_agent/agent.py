@@ -48,14 +48,16 @@ def classify(state: RefundState) -> dict[str, Any]:
     """Populate reasoning and evidence. In a real agent, this would call an LLM."""
     logger.info("Classifying refund request for customer %s", state["customer_id"])
     return {
-        "reasoning": (
-            f"Customer {state['customer_name']} reported persistent dashboard loading "
-            "issues for 3 weeks. Support tickets #4821 and #4856 confirm engineering "
-            "acknowledged the bug. Customer has been with us for 18 months with no "
-            "prior refund requests. The requested amount of "
-            f"${state['amount']:.2f} {state['currency']} is within standard refund "
-            "policy limits."
-        ),
+        "reasoning": {
+            "summary": "Refund justified by confirmed product issue and strong customer history.",
+            "points": [
+                f"Customer {state['customer_name']} reported persistent dashboard loading issues for 3 weeks",
+                "Engineering confirmed the bug in tickets #4821 and #4856",
+                f"Customer requests refund of ${state['amount']:.2f} {state['currency']}",
+                "No prior refund requests in 18-month tenure",
+            ],
+            "confidence": "high",
+        },
         "evidence": [
             {
                 "type": "ticket",

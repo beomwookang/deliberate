@@ -144,4 +144,104 @@ test.describe("Approval Page", () => {
 
     await page2.close();
   });
+
+  test("structured reasoning renders as bullet list with confidence badge", async ({
+    page,
+  }) => {
+    const res = await fetch(`${API_URL}/interrupts`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Deliberate-API-Key": API_KEY,
+      },
+      body: JSON.stringify({
+        thread_id: `playwright-structured-${Date.now()}`,
+        payload: {
+          layout: "financial_decision",
+          subject: "Structured reasoning test",
+          agent_reasoning: {
+            summary: "Refund justified by product issue.",
+            points: [
+              "Customer reported issues for 3 weeks",
+              "Engineering confirmed the bug",
+              "No prior refund requests",
+            ],
+            confidence: "high",
+          },
+          evidence: [{ type: "ticket", summary: "Test evidence" }],
+        },
+      }),
+    });
+    const data = await res.json();
+
+    await page.goto(`/a/${data.approval_id}`);
+
+    // Summary should be visible
+    await expect(
+      page.locator("text=Refund justified by product issue.")
+    ).toBeVisible();
+
+    // Points should render as list items
+    await expect(
+      page.locator("text=Customer reported issues for 3 weeks")
+    ).toBeVisible();
+    await expect(
+      page.locator("text=Engineering confirmed the bug")
+    ).toBeVisible();
+
+    // Confidence badge
+    await expect(page.locator("text=Confidence: high")).toBeVisible();
+  });
+
+  test("XSS in structured reasoning points is sanitized", async ({ page }) => {
+    const res = await fetch(`${API_URL}/interrupts`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Deliberate-API-Key": API_KEY,
+      },
+      body: JSON.stringify({
+        thread_id: `playwright-xss-${Date.now()}`,
+        payload: {
+          layout: "financial_decision",
+          subject: "XSS test",
+          agent_reasoning: {
+            summary: "Normal summary",
+            points: [
+              '<script>alert("xss")</script>',
+              '<img src=x onerror=alert(1)>',
+              "Normal point",
+            ],
+            confidence: "low",
+          },
+          evidence: [
+            {
+              type: "test",
+              summary: '<script>alert("evidence-xss")</script>',
+            },
+          ],
+        },
+      }),
+    });
+    const data = await res.json();
+
+    await page.goto(`/a/${data.approval_id}`);
+
+    // Page should render without errors
+    await expect(page.locator("text=Normal summary")).toBeVisible();
+    await expect(page.locator("text=Normal point")).toBeVisible();
+
+    // XSS content should be stripped by rehype-sanitize, not rendered as HTML.
+    // The script/img tags should NOT appear in the rendered reasoning section.
+    const reasoningSection = page.locator("text=Agent Reasoning").locator("..");
+    const reasoningHtml = await reasoningSection.innerHTML();
+    expect(reasoningHtml).not.toContain("<script>");
+    expect(reasoningHtml).not.toContain("onerror=");
+
+    // Verify no alert dialogs were triggered
+    let alertFired = false;
+    page.on("dialog", () => { alertFired = true; });
+    await page.waitForTimeout(500);
+    expect(alertFired).toBe(false);
+  });
 });

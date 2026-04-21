@@ -2,14 +2,24 @@
  * Financial decision layout — for refunds, expense approvals, budget requests.
  * See PRD §4.2 for the layout specification.
  *
- * Server Component — displays the interrupt payload for the approver.
+ * Supports both string and structured agent_reasoning (PRD §5.1 v3).
  */
+
+import { MarkdownText } from "../../markdown-text";
+
+type AgentReasoning =
+  | string
+  | {
+      summary: string;
+      points?: string[];
+      confidence?: "high" | "medium" | "low";
+    };
 
 export interface FinancialDecisionPayload {
   subject: string;
   amount?: { value: number; currency: string };
   customer?: { id: string; display_name: string; tenure?: string };
-  agent_reasoning?: string;
+  agent_reasoning?: AgentReasoning;
   evidence?: Array<{
     type: string;
     id?: string;
@@ -25,6 +35,54 @@ function formatCurrency(value: number, currency: string): string {
     style: "currency",
     currency,
   }).format(value);
+}
+
+const confidenceColors: Record<string, string> = {
+  high: "bg-green-100 text-green-800",
+  medium: "bg-amber-100 text-amber-800",
+  low: "bg-orange-100 text-orange-800",
+};
+
+function AgentReasoningSection({
+  reasoning,
+}: {
+  reasoning: AgentReasoning;
+}) {
+  // String form: render as markdown
+  if (typeof reasoning === "string") {
+    return <MarkdownText content={reasoning} className="text-gray-700" />;
+  }
+
+  // Structured form
+  return (
+    <div className="space-y-3">
+      {/* Confidence badge */}
+      {reasoning.confidence && (
+        <span
+          className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${confidenceColors[reasoning.confidence] || "bg-gray-100 text-gray-600"}`}
+        >
+          Confidence: {reasoning.confidence}
+        </span>
+      )}
+
+      {/* Summary */}
+      <p className="text-gray-900 font-medium text-sm">{reasoning.summary}</p>
+
+      {/* Points as bullet list */}
+      {reasoning.points && reasoning.points.length > 0 && (
+        <ul className="list-disc list-inside space-y-1">
+          {reasoning.points.map((point, i) => (
+            <li key={i} className="text-gray-700 text-sm">
+              <MarkdownText
+                content={point}
+                className="inline [&>p]:inline"
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 export default function FinancialDecisionLayout({
@@ -74,9 +132,7 @@ export default function FinancialDecisionLayout({
           <h3 className="text-sm font-medium text-gray-500 mb-2">
             Agent Reasoning
           </h3>
-          <p className="text-gray-700 text-sm leading-relaxed">
-            {payload.agent_reasoning}
-          </p>
+          <AgentReasoningSection reasoning={payload.agent_reasoning} />
         </div>
       )}
 
@@ -121,7 +177,9 @@ export default function FinancialDecisionLayout({
                         item.id || "-"
                       )}
                     </td>
-                    <td className="py-2 text-gray-700">{item.summary}</td>
+                    <td className="py-2 text-gray-700">
+                      <MarkdownText content={item.summary} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
