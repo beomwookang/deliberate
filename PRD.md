@@ -1,10 +1,11 @@
 # Deliberate — Product Requirements Document
 
-**Status**: Draft v4 · Pre-1.0 scope
+**Status**: Draft v4.1 · Pre-1.0 scope
 **Last updated**: April 2026
 **Owner**: Beomwoo Kang
 
 **Changelog**
+- v4.1 (Apr 2026): Multi-approver `all_of` semantics formalized. Added `approval_group_id` and `approval_mode` to approvals table. New `GET /approval-groups/{group_id}/status` endpoint with aggregation rules. Decision aggregation: any reject → group reject, all approve → merge notes, approve+modify → most restrictive (smallest numeric value). Ledger entries get `approval_group` field with `group_id` and `role`. `POST /interrupts` response shape extended with `approval_group_id`, `approval_ids`, `approval_mode`.
 - v4 (Apr 2026): Notification adapter details formalized (email/SMTP, webhook/HMAC, Slack DM). Added `notify` field to policy rule schema and `notification_attempts` operational table. Expression evaluator semantics for missing field access and union-type payloads documented. Webhook configuration via `webhooks.yaml`. M2a implementation begins.
 - v3 (Apr 2026): Schema extension for agent_reasoning (structured variant), confidence field added to interrupt payload, audit-mode rendering added to roadmap. Based on M1 human validation findings.
 - v2 (Apr 2026): Five deferred design decisions resolved — Slack UX, delegation, ledger-as-truth, tenant model, LangGraph version support. Schema and data model updated to accommodate near-term additions without migration.
@@ -282,6 +283,14 @@ Groups and individual approvers are resolved separately via `deliberate/config/a
 ```
 
 Broader delegation patterns (conditional delegation, delegation chains, role-based delegation) are deferred to v2.0+ and will arrive alongside a proper auth/RBAC feature. The policy schema will extend, not replace, the v1.1 fields.
+
+**Multi-approver groups (v4.1).** When a rule specifies `all_of: [A, B]`, Deliberate creates one approval per approver, bound by a shared `approval_group_id`. The SDK polls `GET /approval-groups/{group_id}/status` for the aggregated result. Aggregation rules:
+- **All approve** → group decision = `approve`. `decision_payload` from the first approver; `rationale_notes` merged from all approvers (joined with ` | `).
+- **Any reject** → group decision = `reject` immediately (short-circuit). `decision_payload` and `rationale_notes` from the rejecting approver.
+- **Mix of approve + modify** → group decision = `modify`. "Most restrictive" modification wins — defined as smallest numeric value in `decision_payload` for M2a. M3 can make this user-configurable per policy.
+- **`any_of`** → first decision wins. Other pending approvals in the group are marked `superseded`.
+
+Each individual approver's decision is recorded as a separate ledger entry with `approval_group.role` set to `"contributor_to_all_of"` (for `all_of`) or `"one_of_many"` (for `any_of`). Single-approver cases use `"sole_decider"` or `null`.
 
 ### 5.3 Ledger entry
 

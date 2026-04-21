@@ -134,3 +134,30 @@ cd ui && pnpm lint && pnpm typecheck
 - Server: 160 tests (88 policy + 23 notification + 49 existing M1)
 - SDK: 27 tests
 - Total: 187 tests, all passing on main
+
+### Session 3b — 2026-04-22 — M2a validation fixes + all_of multi-approver
+
+#### What's implemented
+- **Fix 1 — mypy --strict:** 11 errors → 0. Renamed shadowed variables, removed stale type: ignore comments, added type narrowing asserts, cast slack_sdk returns.
+- **Fix 2 — ruff lint:** 53 errors → 0. Excluded `alembic/versions/` from ruff config. Fixed import ordering, SIM117 nested with, E501 line lengths in email template, unused variables in tests. All code formatted clean.
+- **Fix 3 — all_of multi-approver end-to-end:**
+  - New `approval_group_id` and `approval_mode` columns on approvals table (migration 0004)
+  - `POST /interrupts` response now includes `approval_group_id`, `approval_ids[]`, `approval_mode` (backward compat: `approval_id` still present)
+  - New `GET /approval-groups/{group_id}/status` endpoint with aggregation
+  - Decision aggregation for all_of: all approve → merge notes, any reject → short-circuit reject, approve+modify → most restrictive (smallest numeric value)
+  - any_of: first decision wins, other approvals marked "superseded"
+  - Ledger entries get `approval_group: {group_id, role}` field
+  - SDK: `submit_interrupt()` returns `InterruptResult`, `poll_group_status()` for groups, `wait_for_decision(use_group=True)` for all_of
+  - Decorator handles auto_approve return and group-based polling
+  - 6 new integration tests for approval groups
+
+#### Key decisions
+- **"Most restrictive" = smallest numeric value:** For M2a, when all_of has mixed approve+modify decisions, the modification with the smallest numeric value in `decision_payload` wins. M3 can make this configurable per policy.
+- **Early reject in all_of:** If any approver rejects, the group is immediately decided as reject. Other approvers' pending approvals are not superseded (they can still record their decision for audit, but the group outcome is already set).
+- **conftest uses drop_all + create_all:** Changed from `create_all` only to `drop_all` + `create_all` to pick up new columns in tests without running Alembic.
+- **alembic/versions/ excluded from ruff:** Auto-generated migration boilerplate uses `Union[str, None]` and unsorted imports that are not worth fixing. Documented in pyproject.toml.
+
+#### Test counts
+- Server: 212 tests (was 206)
+- SDK: 30 tests (was 27)
+- Total: 242 tests, all passing. mypy --strict clean. ruff clean.
