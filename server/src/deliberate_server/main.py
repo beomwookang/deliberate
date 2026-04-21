@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from deliberate_server.api.routes.approval_groups import router as approval_groups_router
 from deliberate_server.api.routes.approvals import router as approvals_router
 from deliberate_server.api.routes.interrupts import router as interrupts_router
 from deliberate_server.api.routes.ledger import router as ledger_router
@@ -40,6 +41,7 @@ app.add_middleware(
 
 app.include_router(interrupts_router)
 app.include_router(approvals_router)
+app.include_router(approval_groups_router)
 app.include_router(ledger_router)
 
 

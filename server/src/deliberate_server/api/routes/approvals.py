@@ -171,6 +171,28 @@ async def submit_decision(approval_id: uuid.UUID, body: DecideRequest) -> Decide
         # Update approval status
         approval.status = "decided"
 
+        # For any_of groups, supersede other pending approvals
+        if approval.approval_group_id and approval.approval_mode == "any_of":
+            siblings = await session.execute(
+                select(Approval).where(
+                    Approval.approval_group_id == approval.approval_group_id,
+                    Approval.id != approval_id,
+                    Approval.status == "pending",
+                )
+            )
+            for sibling in siblings.scalars().all():
+                sibling.status = "superseded"
+
+        # Determine approval_group metadata for ledger
+        group_role: str | None = None
+        if approval.approval_group_id:
+            if approval.approval_mode == "any_of":
+                group_role = "one_of_many"
+            elif approval.approval_mode == "all_of":
+                group_role = "contributor_to_all_of"
+        else:
+            group_role = "sole_decider"
+
         # Build ledger content per PRD §5.3
         ledger_content: dict[str, Any] = {
             "id": str(uuid.uuid4()),
@@ -180,8 +202,8 @@ async def submit_decision(approval_id: uuid.UUID, body: DecideRequest) -> Decide
             "application_id": interrupt.application_id,
             "interrupt": interrupt.payload,
             "policy_evaluation": {
-                "matched_rule": "m1_default",
-                "policy_name": "m1_env_approver",
+                "matched_rule": interrupt.policy_name or "m1_default",
+                "policy_name": interrupt.policy_name or "m1_env_approver",
                 "policy_version_hash": "sha256:m1-no-policy",
             },
             "approval": {
@@ -196,6 +218,10 @@ async def submit_decision(approval_id: uuid.UUID, body: DecideRequest) -> Decide
                 "channel": "none",
                 "decided_via": body.decided_via,
                 "review_duration_ms": body.review_duration_ms,
+            },
+            "approval_group": {
+                "group_id": str(approval.approval_group_id) if approval.approval_group_id else None,
+                "role": group_role,
             },
             "escalations": [],
             "resume": None,

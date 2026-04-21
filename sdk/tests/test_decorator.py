@@ -12,10 +12,12 @@ from uuid import uuid4
 
 import pytest
 
+from deliberate.client import InterruptResult
 from deliberate.decorator import approval_gate
 from deliberate.types import Decision, DeliberateTimeoutError
 
 FAKE_APPROVAL_ID = uuid4()
+FAKE_GROUP_ID = uuid4()
 FAKE_DECISION = Decision(
     id=FAKE_APPROVAL_ID,
     decision_type="approve",
@@ -28,7 +30,12 @@ FAKE_DECISION = Decision(
 def _mock_client() -> Any:
     """Create a mock DeliberateClient that returns a successful decision."""
     mock = AsyncMock()
-    mock.submit_interrupt.return_value = (FAKE_APPROVAL_ID, "pending")
+    mock.submit_interrupt.return_value = InterruptResult(
+        approval_group_id=FAKE_GROUP_ID,
+        approval_ids=[FAKE_APPROVAL_ID],
+        approval_mode="any_of",
+        status="pending",
+    )
     mock.approval_url.return_value = f"http://localhost:3000/a/{FAKE_APPROVAL_ID}"
     mock.wait_for_decision.return_value = FAKE_DECISION
     mock.submit_resume_ack.return_value = None

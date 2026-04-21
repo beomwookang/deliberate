@@ -37,8 +37,9 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
     """
     engine = create_async_engine(_TEST_DB_URL, poolclass=NullPool)
 
-    # Create tables + clean + seed in one connection sequence
+    # Drop and recreate tables to pick up schema changes (new columns)
     async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
     async with engine.begin() as conn:

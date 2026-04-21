@@ -1,6 +1,6 @@
 """Tests for DeliberateClient against a mocked server.
 
-Covers: happy path, server 500, polling timeout, decision round-trip.
+Covers: happy path, server 500, polling timeout, decision round-trip, group polling.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from uuid import uuid4
 import httpx
 import pytest
 
-from deliberate.client import DeliberateClient
+from deliberate.client import DeliberateClient, InterruptResult
 from deliberate.types import (
     DeliberateServerError,
     DeliberateTimeoutError,
@@ -20,6 +20,25 @@ from deliberate.types import (
 )
 
 FAKE_APPROVAL_ID = uuid4()
+FAKE_GROUP_ID = uuid4()
+
+
+def _make_interrupt_response(
+    approval_id: str | None = None,
+    group_id: str | None = None,
+    mode: str = "any_of",
+    status: str = "pending",
+) -> dict[str, Any]:
+    """Build a standard interrupt response with group fields."""
+    aid = approval_id or str(FAKE_APPROVAL_ID)
+    gid = group_id or str(FAKE_GROUP_ID)
+    return {
+        "approval_group_id": gid,
+        "approval_ids": [aid],
+        "approval_mode": mode,
+        "approval_id": aid,
+        "status": status,
+    }
 
 
 def _make_handler(
@@ -77,17 +96,17 @@ async def test_submit_interrupt_happy_path(payload: InterruptPayload) -> None:
         {
             "/interrupts": {
                 "status": 200,
-                "body": {
-                    "approval_id": str(FAKE_APPROVAL_ID),
-                    "status": "pending",
-                },
+                "body": _make_interrupt_response(),
             }
         }
     )
     client = _make_client(handler)
-    approval_id, status = await client.submit_interrupt(payload=payload, thread_id="thread-123")
-    assert approval_id == FAKE_APPROVAL_ID
-    assert status == "pending"
+    result = await client.submit_interrupt(payload=payload, thread_id="thread-123")
+    assert isinstance(result, InterruptResult)
+    assert result.approval_group_id == FAKE_GROUP_ID
+    assert result.approval_id == FAKE_APPROVAL_ID
+    assert result.status == "pending"
+    assert result.approval_mode == "any_of"
     await client.close()
 
 
@@ -131,6 +150,53 @@ async def test_poll_status_decided() -> None:
     assert decision.decision_payload == {"amount": 750.0}
     assert decision.rationale_category == "product_issue"
     assert decision.rationale_notes == "Bug confirmed"
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_poll_group_status_pending() -> None:
+    handler = _make_handler(
+        {
+            "/approval-groups": {
+                "status": 200,
+                "body": {
+                    "approval_group_id": str(FAKE_GROUP_ID),
+                    "approval_mode": "all_of",
+                    "status": "pending",
+                    "approvals": [],
+                },
+            }
+        }
+    )
+    client = _make_client(handler)
+    result = await client.poll_group_status(FAKE_GROUP_ID)
+    assert result is None
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_poll_group_status_decided() -> None:
+    handler = _make_handler(
+        {
+            "/approval-groups": {
+                "status": 200,
+                "body": {
+                    "approval_group_id": str(FAKE_GROUP_ID),
+                    "approval_mode": "all_of",
+                    "status": "decided",
+                    "approvals": [],
+                    "decision_type": "approve",
+                    "decision_payload": {"amount": 750.0},
+                    "rationale_notes": "Approved by both",
+                },
+            }
+        }
+    )
+    client = _make_client(handler)
+    decision = await client.poll_group_status(FAKE_GROUP_ID)
+    assert decision is not None
+    assert decision.decision_type == "approve"
+    assert decision.decision_payload == {"amount": 750.0}
     await client.close()
 
 
@@ -190,12 +256,38 @@ async def test_wait_for_decision_timeout() -> None:
     client = _make_client(handler)
     with pytest.raises(DeliberateTimeoutError) as exc_info:
         await client.wait_for_decision(
-            approval_id=FAKE_APPROVAL_ID,
+            FAKE_APPROVAL_ID,
             timeout_seconds=1,
             poll_interval_seconds=1,
         )
     assert exc_info.value.timeout_seconds == 1
     assert str(FAKE_APPROVAL_ID) in str(exc_info.value)
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_wait_for_decision_group_timeout() -> None:
+    handler = _make_handler(
+        {
+            "/approval-groups": {
+                "status": 200,
+                "body": {
+                    "approval_group_id": str(FAKE_GROUP_ID),
+                    "approval_mode": "all_of",
+                    "status": "pending",
+                    "approvals": [],
+                },
+            }
+        }
+    )
+    client = _make_client(handler)
+    with pytest.raises(DeliberateTimeoutError):
+        await client.wait_for_decision(
+            FAKE_GROUP_ID,
+            timeout_seconds=1,
+            poll_interval_seconds=1,
+            use_group=True,
+        )
     await client.close()
 
 
@@ -257,10 +349,7 @@ async def test_submit_interrupt_sends_correct_body(payload: InterruptPayload) ->
         captured_body.update(json.loads(request.content))
         return httpx.Response(
             200,
-            json={
-                "approval_id": str(FAKE_APPROVAL_ID),
-                "status": "pending",
-            },
+            json=_make_interrupt_response(),
         )
 
     handler = _make_handler({"/interrupts": capture_handler})

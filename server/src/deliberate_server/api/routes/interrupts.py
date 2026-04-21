@@ -49,9 +49,13 @@ class InterruptRequest(BaseModel):
 class InterruptResponse(BaseModel):
     """Response body for POST /interrupts."""
 
-    approval_id: str
+    approval_group_id: str
+    approval_ids: list[str]
+    approval_mode: str  # "any_of" or "all_of"
     status: str  # "pending" or "auto_approved"
     decision_type: str | None = None  # Populated for auto_approve
+    # Backward compat: approval_id is first approval_id (deprecated)
+    approval_id: str
 
 
 @router.post("", response_model=InterruptResponse)
@@ -228,8 +232,12 @@ async def _handle_auto_approve(
         plan.rationale,
     )
 
+    group_id = str(interrupt_id)  # For auto-approve, use interrupt_id as group
     return InterruptResponse(
-        approval_id=str(interrupt_id),
+        approval_group_id=group_id,
+        approval_ids=[],
+        approval_mode="auto_approve",
+        approval_id=group_id,
         status="auto_approved",
         decision_type="auto_approve",
     )
@@ -243,8 +251,10 @@ async def _handle_request_human(
     interrupt_id: uuid.UUID,
     now: datetime,
 ) -> InterruptResponse:
-    """Human approval required: create interrupt + approval row(s)."""
+    """Human approval required: create interrupt + approval row(s) with group ID."""
     timeout_delta = timedelta(seconds=plan.timeout_seconds or DEFAULT_TIMEOUT_HOURS * 3600)
+    group_id = uuid.uuid4()
+    approval_ids: list[uuid.UUID] = []
 
     async with async_session() as session, session.begin():
         interrupt_row = Interrupt(
@@ -260,70 +270,74 @@ async def _handle_request_human(
         session.add(interrupt_row)
         await session.flush()
 
+        if not plan.approvers:
+            raise HTTPException(
+                status_code=500,
+                detail="Policy resolved to request_human but no approvers specified",
+            )
+
         if plan.approval_mode == "any_of":
             # Single approval row — any approver can decide
-            approval_id = uuid.uuid4()
-            # Use first approver as default assignee; all are notified
-            approver_id = plan.approvers[0].id if plan.approvers else None
-            approval_row = Approval(
-                id=approval_id,
-                interrupt_id=interrupt_id,
-                approver_id=approver_id,
-                acting_for=None,
-                status="pending",
-                timeout_at=now + timeout_delta,
-                escalated_to=None,
-                delegation_reason=None,
-                created_at=now,
-            )
-            session.add(approval_row)
-        else:
-            # all_of: create one approval per approver
-            approval_id = None
-            for approver in plan.approvers:
-                aid = uuid.uuid4()
-                if approval_id is None:
-                    approval_id = aid  # Return the first one to the SDK
-                approval_row = Approval(
+            aid = uuid.uuid4()
+            approval_ids.append(aid)
+            session.add(
+                Approval(
                     id=aid,
                     interrupt_id=interrupt_id,
-                    approver_id=approver.id,
+                    approver_id=plan.approvers[0].id,
                     acting_for=None,
                     status="pending",
                     timeout_at=now + timeout_delta,
                     escalated_to=None,
                     delegation_reason=None,
+                    approval_group_id=group_id,
+                    approval_mode="any_of",
                     created_at=now,
                 )
-                session.add(approval_row)
-
-            if approval_id is None:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Policy resolved to request_human but no approvers specified",
+            )
+        else:
+            # all_of: one approval per approver, same group
+            for approver in plan.approvers:
+                aid = uuid.uuid4()
+                approval_ids.append(aid)
+                session.add(
+                    Approval(
+                        id=aid,
+                        interrupt_id=interrupt_id,
+                        approver_id=approver.id,
+                        acting_for=None,
+                        status="pending",
+                        timeout_at=now + timeout_delta,
+                        escalated_to=None,
+                        delegation_reason=None,
+                        approval_group_id=group_id,
+                        approval_mode="all_of",
+                        created_at=now,
+                    )
                 )
 
-    assert approval_id is not None  # Narrowing: either branch sets it or raises
+    first_approval_id = approval_ids[0]
 
-    # Log the approval URL with grep-friendly prefix
-    approval_url = f"{settings.ui_url}/a/{approval_id}"
-    logger.info("[APPROVAL_URL] %s", approval_url)
+    # Log approval URLs
+    for aid in approval_ids:
+        logger.info("[APPROVAL_URL] %s/a/%s", settings.ui_url, aid)
     logger.info(
-        "Interrupt %s routed: policy=%s, rule=%s, mode=%s, approvers=%s, notify=%s",
+        "Interrupt %s routed: policy=%s, rule=%s, mode=%s, group=%s, approvers=%s, notify=%s",
         interrupt_id,
         plan.matched_policy_name,
         plan.matched_rule_name,
         plan.approval_mode,
+        group_id,
         [a.email for a in plan.approvers],
         plan.notify_channels,
     )
 
-    # Fire notifications (Phase 2.5)
-    approval_url = f"{settings.ui_url}/a/{approval_id}"
+    # Fire notifications
+    approval_url = f"{settings.ui_url}/a/{first_approval_id}"
     try:
         results = await notification_dispatcher.dispatch(
             plan=plan,
-            approval_id=approval_id,
+            approval_id=first_approval_id,
             application_id=app_row.id,
             payload=body.payload,
             approval_url=approval_url,
@@ -331,13 +345,18 @@ async def _handle_request_human(
         if results:
             successes = sum(1 for r in results if r.success)
             logger.info(
-                "Notifications dispatched for approval %s: %d/%d succeeded",
-                approval_id,
+                "Notifications dispatched for group %s: %d/%d succeeded",
+                group_id,
                 successes,
                 len(results),
             )
     except Exception:
-        # Notification failure is non-fatal — the approval is already created
-        logger.exception("Notification dispatch failed for approval %s", approval_id)
+        logger.exception("Notification dispatch failed for group %s", group_id)
 
-    return InterruptResponse(approval_id=str(approval_id), status="pending")
+    return InterruptResponse(
+        approval_group_id=str(group_id),
+        approval_ids=[str(a) for a in approval_ids],
+        approval_mode=plan.approval_mode,
+        approval_id=str(first_approval_id),  # Backward compat
+        status="pending",
+    )

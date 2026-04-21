@@ -77,6 +77,9 @@ class Approval(Base):
         UUID(as_uuid=True), ForeignKey("approvals.id"), nullable=True
     )
     delegation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)  # Reserved for v1.1+
+    # Approval group fields (M2a: multi-approver support)
+    approval_group_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    approval_mode: Mapped[str | None] = mapped_column(Text, nullable=True)  # any_of, all_of
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("NOW()")
     )
@@ -87,6 +90,11 @@ class Approval(Base):
             "status",
             "timeout_at",
             postgresql_where=text("status = 'pending'"),
+        ),
+        Index(
+            "idx_approvals_group",
+            "approval_group_id",
+            postgresql_where=text("approval_group_id IS NOT NULL"),
         ),
     )
 

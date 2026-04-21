@@ -58,10 +58,9 @@ def _make_interrupt(thread_id: str = "thread-001", subject: str = "Test") -> dic
 async def client():
     engine = create_async_engine(_TEST_DB_URL, poolclass=NullPool)
     async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
-        for tbl in ("ledger_entries", "decisions", "approvals", "interrupts", "approvers"):
-            await conn.execute(text(f"DELETE FROM {tbl}"))
-        await conn.execute(text("DELETE FROM applications"))
+    async with engine.begin() as conn:
         await conn.execute(
             text(
                 "INSERT INTO applications (id, display_name, api_key_hash) "
@@ -385,7 +384,7 @@ async def test_c7_client_timeout(client: AsyncClient) -> None:
 
         with pytest.raises(DeliberateTimeoutError) as exc_info:
             await sdk_client.wait_for_decision(
-                approval_id=uuid.UUID(approval_id),
+                uuid.UUID(approval_id),
                 timeout_seconds=2,
                 poll_interval_seconds=1,
             )

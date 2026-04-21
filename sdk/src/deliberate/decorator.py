@@ -139,9 +139,26 @@ def approval_gate(
 
             loop = asyncio.new_event_loop()
             try:
-                approval_id, _status = loop.run_until_complete(
+                interrupt_result = loop.run_until_complete(
                     client.submit_interrupt(payload=payload, thread_id=thread_id)
                 )
+
+                # Auto-approve: return immediately
+                if interrupt_result.status == "auto_approved":
+                    return {
+                        "decision": {
+                            "decision_type": "auto_approve",
+                            "decision_payload": None,
+                            "rationale_category": "auto_approved_by_policy",
+                            "rationale_notes": None,
+                            "approval_id": str(interrupt_result.approval_group_id),
+                            "approval_url": None,
+                        }
+                    }
+
+                approval_id = interrupt_result.approval_id
+                group_id = interrupt_result.approval_group_id
+                use_group = interrupt_result.approval_mode == "all_of"
 
                 url = client.approval_url(approval_id)
                 logger.info("[APPROVAL_URL] %s", url)
@@ -151,8 +168,9 @@ def approval_gate(
 
                 decision = loop.run_until_complete(
                     client.wait_for_decision(
-                        approval_id=approval_id,
+                        approval_id_or_group_id=group_id if use_group else approval_id,
                         timeout_seconds=timeout_seconds,
+                        use_group=use_group,
                     )
                 )
 
@@ -173,6 +191,7 @@ def approval_gate(
                         "rationale_category": decision.rationale_category,
                         "rationale_notes": decision.rationale_notes,
                         "approval_id": str(approval_id),
+                        "approval_group_id": str(group_id),
                         "approval_url": url,
                     }
                 }

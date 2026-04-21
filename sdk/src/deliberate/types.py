@@ -146,6 +146,13 @@ class ResumeRecord(BaseModel):
     resume_status: str  # success, error
 
 
+class ApprovalGroupRecord(BaseModel):
+    """Group metadata for multi-approver flows (M2a)."""
+
+    group_id: str | None = None
+    role: str | None = None  # "one_of_many" | "sole_decider" | "contributor_to_all_of"
+
+
 class LedgerEntry(BaseModel):
     """The structured record written when an approval decision completes.
 
@@ -164,6 +171,7 @@ class LedgerEntry(BaseModel):
     policy_evaluation: PolicyEvaluation
 
     approval: ApprovalRecord | None = None  # NULL if timed_out with no decision
+    approval_group: ApprovalGroupRecord | None = None  # M2a: multi-approver group
     escalations: list[EscalationRecord] = Field(default_factory=list)
     resume: ResumeRecord | None = None
 
