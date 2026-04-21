@@ -1,10 +1,11 @@
 # Deliberate — Product Requirements Document
 
-**Status**: Draft v2 · Pre-1.0 scope
+**Status**: Draft v3 · Pre-1.0 scope
 **Last updated**: April 2026
 **Owner**: Beomwoo Kang
 
 **Changelog**
+- v3 (Apr 2026): Schema extension for agent_reasoning (structured variant), confidence field added to interrupt payload, audit-mode rendering added to roadmap. Based on M1 human validation findings.
 - v2 (Apr 2026): Five deferred design decisions resolved — Slack UX, delegation, ledger-as-truth, tenant model, LangGraph version support. Schema and data model updated to accommodate near-term additions without migration.
 
 ---
@@ -133,6 +134,8 @@ Layouts are opinionated information architectures for common approval contexts. 
 
 **`procedure_signoff`** — For audit procedures, compliance checks, quality gates. Emphasizes a checklist of completed steps, flagged exceptions with evidence references, and standards reference. Decision actions: sign off / request rework / escalate. Supports linking to external standards documentation.
 
+Layouts render in both decision and audit modes. Before a decision is made, the layout shows the decision form. After, the same layout shows the decision record — who decided, when, with what rationale, against the original context. This symmetry means auditors and approvers see the same information architecture, just with different affordances. v1 focuses on the decision mode; unified audit view is scoped to M3.
+
 ### 4.3 Out of scope explicitly
 
 - Building our own LLM-based decision assistance. Deliberate presents what the agent provides; it does not re-reason about the decision.
@@ -160,6 +163,17 @@ What the SDK captures when a LangGraph node calls `interrupt()` inside an `@appr
     "tenure": "18 months",
   },
   "agent_reasoning": "Customer reported persistent dashboard loading issues for 3 weeks. Support tickets #4821, #4856 confirm engineering acknowledged the bug...",
+  // OR structured form (union type — string or object):
+  // "agent_reasoning": {
+  //   "summary": "Refund supported by product issue and customer tenure.",
+  //   "points": [
+  //     "Customer reported dashboard loading issues for 3 weeks",
+  //     "Engineering confirmed the bug (tickets #4821, #4856)",
+  //     "Customer requested refund for remaining 5 months",
+  //     "No prior refund history"
+  //   ],
+  //   "confidence": "high"   // Optional: "high" | "medium" | "low"
+  // },
   "evidence": [
     {"type": "ticket", "id": "#4821", "summary": "Bug confirmed", "url": "https://support.../4821"},
     {"type": "ticket", "id": "#4856", "summary": "Escalation", "url": "https://support.../4856"},
@@ -183,6 +197,10 @@ What the SDK captures when a LangGraph node calls `interrupt()` inside an `@appr
 ```
 
 Core principle: the payload is everything an approver needs to decide, plus everything a future auditor needs to understand the context. Agent-level data (reasoning, evidence) and decision mechanics (options, rationale categories) are first-class; the graph-level metadata is pass-through.
+
+For reasoning complex enough to benefit from structure, use the object form of agent_reasoning — the UI will render points[] as a list and may use confidence to flag low-evidence decisions.
+
+Reasoning can be string or structured. For short reasoning, a single string remains fine. For complex decisions, a structured variant with summary, points[], and optional confidence produces better readability. UI layouts render both forms; agents choose what fits their output. This addition came from M1 manual validation where multi-sentence string reasoning showed readability issues on mobile.
 
 ### 5.2 Policy (YAML)
 
@@ -597,7 +615,7 @@ Release as `v0.1.0` on PyPI and Docker Hub. Announce on LangGraph Discord, relev
 ### M3 — Ledger and audit (end of week 8)
 
 - Ledger entry signing and content-hash verification
-- Ledger query UI for auditors
+- Ledger query UI for auditors, unified with the approval layout (audit mode renders the same layout as decision mode, with decision record in place of decision form)
 - JSON and CSV export
 - Webhook notification adapter with signed payloads
 - Approver identity via Google OAuth (GitHub post-1.0)
