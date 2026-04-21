@@ -147,6 +147,33 @@ class LedgerEntry(Base):
     )
 
 
+class NotificationAttempt(Base):
+    """Notification delivery tracking — operational, not part of canonical ledger (PRD §6.3 v4)."""
+
+    __tablename__ = "notification_attempts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    application_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("applications.id"), nullable=False, server_default=text("'default'")
+    )
+    approval_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("approvals.id"), nullable=False
+    )
+    channel: Mapped[str] = mapped_column(Text, nullable=False)  # email, webhook, slack
+    approver_email: Mapped[str] = mapped_column(Text, nullable=False)
+    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    message_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    attempted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+
+    __table_args__ = (
+        Index("idx_notifications_approval", "application_id", "approval_id"),
+    )
+
+
 class Approver(Base):
     """Approver directory with reserved OOO fields for v1.1+ (PRD §6.3)."""
 

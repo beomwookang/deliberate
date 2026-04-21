@@ -21,7 +21,7 @@ policy_engine = PolicyEngine(approver_directory)
 
 
 def init_policy_system() -> None:
-    """Initialize the policy engine and approver directory from config.
+    """Initialize the policy engine, approver directory, and notification system.
 
     Called at application startup. Gracefully handles missing config files
     when DEFAULT_APPROVER_EMAIL fallback is available.
@@ -73,6 +73,11 @@ def init_policy_system() -> None:
             "No policies directory at %s — using DEFAULT_APPROVER_EMAIL fallback.",
             policies_path,
         )
+
+    # Initialize notification adapters
+    from deliberate_server.notify import init_notification_system
+
+    init_notification_system()
 
 
 __all__ = [

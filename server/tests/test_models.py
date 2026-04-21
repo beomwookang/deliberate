@@ -8,6 +8,7 @@ from deliberate_server.db.models import (
     Decision,
     Interrupt,
     LedgerEntry,
+    NotificationAttempt,
 )
 
 
@@ -29,5 +30,6 @@ def test_base_metadata_has_all_tables() -> None:
         "decisions",
         "ledger_entries",
         "approvers",
+        "notification_attempts",
     }
     assert expected == table_names

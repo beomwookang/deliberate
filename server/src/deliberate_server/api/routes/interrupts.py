@@ -26,6 +26,7 @@ from deliberate_server.config import settings
 from deliberate_server.db.models import Application, Approval, Interrupt
 from deliberate_server.db.models import LedgerEntry as LedgerEntryModel
 from deliberate_server.db.session import async_session
+from deliberate_server.notify import notification_dispatcher
 from deliberate_server.policy import NoMatchingPolicyError, policy_engine
 from deliberate_server.policy.types import ResolvedPlan
 
@@ -319,7 +320,26 @@ async def _handle_request_human(
         plan.notify_channels,
     )
 
-    # Store the plan on the request context for notification dispatch (Phase 2.5)
-    # For now, notifications are not wired — they will be added in Phase 2.5.
+    # Fire notifications (Phase 2.5)
+    approval_url = f"{settings.ui_url}/a/{approval_id}"
+    try:
+        results = await notification_dispatcher.dispatch(
+            plan=plan,
+            approval_id=approval_id,
+            application_id=app_row.id,
+            payload=body.payload,
+            approval_url=approval_url,
+        )
+        if results:
+            successes = sum(1 for r in results if r.success)
+            logger.info(
+                "Notifications dispatched for approval %s: %d/%d succeeded",
+                approval_id,
+                successes,
+                len(results),
+            )
+    except Exception:
+        # Notification failure is non-fatal — the approval is already created
+        logger.exception("Notification dispatch failed for approval %s", approval_id)
 
     return InterruptResponse(approval_id=str(approval_id), status="pending")
