@@ -97,3 +97,40 @@ cd ui && pnpm lint && pnpm typecheck
 - `sdk/src/deliberate/client.py:75` — `TODO(M2): Replace with signed token per PRD §6.6`
 - `server/src/deliberate_server/api/routes/approvals.py:100` — `TODO(M2): Replace with signed token per PRD §6.6`
 - `ui/app/a/[approval_id]/page.tsx:15` — `TODO(M2): Replace with signed token per PRD §6.6`
+
+### Session 3 — 2026-04-22 — Milestone M2a (Policy engine + Notifications)
+
+#### What's implemented
+- **PRD Draft v4:** Added `notify` field to policy rules, `notification_attempts` table, expression evaluator semantics for union types/missing fields, `webhooks.yaml` config, M2 split into M2a/M2b/M2c sub-milestones.
+- **Phase 1.1 — Approver directory:** `ApproverDirectory` class loads `approvers.yaml`, resolves individual IDs and groups, hot-reloads via polling. Shared Pydantic models (`ApproverEntry`, `ApproverGroup`, `ResolvedApprover`) in SDK `types.py`. 18 tests.
+- **Phase 1.2 — Policy engine:** Recursive descent parser (tokenizer → AST → evaluator) for the PRD §5.2 expression language. All operators: `<`, `>`, `<=`, `>=`, `==`, `!=`, `and`, `or`, `not`, `contains`. Missing field access → `false` (not error). `contains` on structured `agent_reasoning` falls back to `summary` field. `PolicyEngine` loads YAML policies, evaluates top-to-bottom first-match-wins, returns `ResolvedPlan`. 70 tests (50 expression + 20 engine).
+- **Phase 1.3 — M1 migration path:** `DEFAULT_APPROVER_EMAIL` env var still works as fallback when no policy matches (deprecation warning logged). Returns 400 if no policy matches and no env var set.
+- **Phase 1.4 — Policy-driven interrupt handler:** `POST /interrupts` calls `policy_engine.evaluate(payload)`. Auto-approve writes ledger directly (`approver_email=system`, `rationale_category=auto_approved_by_policy`, `review_duration_ms=0`). `any_of` creates single approval row; `all_of` creates one per approver.
+- **Phase 2.1 — Notifier protocol + dispatcher:** `Notifier` protocol, `NotificationDispatcher` with `asyncio.gather` parallel dispatch. `notification_attempts` table (migration 0003). Individual channel failures non-fatal. 7 dispatcher tests.
+- **Phase 2.2 — Email adapter:** `aiosmtplib` async SMTP, HTML + plain-text templates with "Review and decide" button. Retries 3x with backoff on connection failure, immediate fail on auth error.
+- **Phase 2.3 — Webhook adapter:** HMAC-SHA256 signed payloads (`X-Deliberate-Signature`). Multi-destination fan-out to all active webhooks in `webhooks.yaml`. Retries 3x on 5xx, no retry on 4xx. 9 tests.
+- **Phase 2.4 — Slack adapter:** `slack_sdk` with `users.lookupByEmail` → `conversations.open` → `chat.postMessage`. Block Kit message with header, reasoning, amount, and "Review and decide" button. User cache (1h TTL). 7 tests.
+- **Phase 2.5 — Wiring:** Dispatcher called from interrupt handler after approval creation. MailHog added to docker-compose with `profiles: ["dev"]`.
+
+#### Key decisions made during M2a
+- **Simple polling for hot-reload, not watchdog:** Used a background thread with 5s polling instead of the `watchdog` package. Avoids an extra dependency; the polling interval is configurable and adequate for config file changes.
+- **No eval() anywhere:** The expression parser is a purpose-built recursive descent parser. Security-critical: we're evaluating user-provided YAML against agent payloads.
+- **Missing field access → false, not error:** Per user direction (Correction 3). Makes policies author-friendly across payload variants (string vs structured `agent_reasoning`).
+- **`contains` on structured reasoning → summary fallback:** Per user direction. `agent_reasoning contains 'fraud'` checks `summary` field when reasoning is structured.
+- **Auto-approve shape:** `approver_email="system"`, `rationale_category="auto_approved_by_policy"`, `review_duration_ms=0`. No approval row created.
+- **env_prefix stays empty:** Kept `env_prefix=""` in pydantic-settings to maintain backward compatibility with existing docker-compose and env vars (`SECRET_KEY`, `DATABASE_URL`, etc.).
+- **MailHog in dev profile:** `profiles: ["dev"]` per user direction (not `"test"`). Used for manual UX testing of email readability.
+- **aiohttp added as dependency:** Required by `slack_sdk`'s async client.
+
+#### M2a decisions deferred to M2b/M2c
+- Timeout worker and escalation logic execution (M2b).
+- `document_review` and `procedure_signoff` layouts (M2b).
+- Slack inline approval (v1.2, per PRD §6.5).
+- Signed approval URL tokens (PRD §6.6 — still using raw UUIDs).
+- OAuth for approvers (magic-link style from M1 still active).
+- Quickstart docs and v0.1.0 release (M2c).
+
+#### Test counts
+- Server: 160 tests (88 policy + 23 notification + 49 existing M1)
+- SDK: 27 tests
+- Total: 187 tests, all passing on main
