@@ -5,11 +5,11 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import ClassVar
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
-
 from deliberate.types import ResolvedApprover
+
 from deliberate_server.notify.base import NotificationContext, NotificationResult
 from deliberate_server.notify.dispatcher import NotificationDispatcher
 from deliberate_server.policy.types import ResolvedPlan

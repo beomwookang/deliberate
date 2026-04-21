@@ -58,7 +58,10 @@ def _write_policy(policies_dir: Path, name: str, content: str) -> Path:
 
 class TestPolicyLoading:
     def test_load_valid_policy(self, directory: ApproverDirectory, policies_dir: Path) -> None:
-        _write_policy(policies_dir, "refund", """\
+        _write_policy(
+            policies_dir,
+            "refund",
+            """\
             name: refund_approval
             matches:
               layout: financial_decision
@@ -76,7 +79,8 @@ class TestPolicyLoading:
                 on_timeout: escalate
                 escalate_to: finance_lead
                 notify: [email, slack]
-        """)
+        """,
+        )
         engine = PolicyEngine(directory)
         engine.load_policies(policies_dir)
         assert engine.policy_count == 1
@@ -95,7 +99,10 @@ class TestPolicyLoading:
     def test_invalid_expression_fails_on_load(
         self, directory: ApproverDirectory, policies_dir: Path
     ) -> None:
-        _write_policy(policies_dir, "bad", """\
+        _write_policy(
+            policies_dir,
+            "bad",
+            """\
             name: bad_policy
             matches:
               layout: financial_decision
@@ -104,7 +111,8 @@ class TestPolicyLoading:
                 when: "amount.value @@ 100"
                 approvers:
                   any_of: [finance_team]
-        """)
+        """,
+        )
         engine = PolicyEngine(directory)
         with pytest.raises(PolicyLoadError, match="Invalid expression"):
             engine.load_policies(policies_dir)
@@ -112,7 +120,10 @@ class TestPolicyLoading:
     def test_unknown_approver_fails_on_load(
         self, directory: ApproverDirectory, policies_dir: Path
     ) -> None:
-        _write_policy(policies_dir, "bad_approver", """\
+        _write_policy(
+            policies_dir,
+            "bad_approver",
+            """\
             name: bad_approver_policy
             matches:
               layout: financial_decision
@@ -121,7 +132,8 @@ class TestPolicyLoading:
                 when: "true"
                 approvers:
                   any_of: [nonexistent_team]
-        """)
+        """,
+        )
         engine = PolicyEngine(directory)
         with pytest.raises(PolicyLoadError, match="unknown approver"):
             engine.load_policies(policies_dir)
@@ -130,7 +142,10 @@ class TestPolicyLoading:
 class TestRuleMatching:
     @pytest.fixture()
     def engine(self, directory: ApproverDirectory, policies_dir: Path) -> PolicyEngine:
-        _write_policy(policies_dir, "refund", """\
+        _write_policy(
+            policies_dir,
+            "refund",
+            """\
             name: refund_approval
             matches:
               layout: financial_decision
@@ -156,7 +171,8 @@ class TestRuleMatching:
                 on_timeout: fail
                 require_rationale: true
                 notify: [email, slack, webhook]
-        """)
+        """,
+        )
         eng = PolicyEngine(directory)
         eng.load_policies(policies_dir)
         return eng
@@ -231,7 +247,10 @@ class TestMatcherFiltering:
     def test_layout_mismatch_skips_policy(
         self, directory: ApproverDirectory, policies_dir: Path
     ) -> None:
-        _write_policy(policies_dir, "refund", """\
+        _write_policy(
+            policies_dir,
+            "refund",
+            """\
             name: refund_only
             matches:
               layout: financial_decision
@@ -240,7 +259,8 @@ class TestMatcherFiltering:
                 when: "true"
                 approvers:
                   any_of: [finance_lead]
-        """)
+        """,
+        )
         engine = PolicyEngine(directory)
         engine.load_policies(policies_dir)
 
@@ -251,7 +271,10 @@ class TestMatcherFiltering:
     def test_subject_contains_mismatch(
         self, directory: ApproverDirectory, policies_dir: Path
     ) -> None:
-        _write_policy(policies_dir, "refund", """\
+        _write_policy(
+            policies_dir,
+            "refund",
+            """\
             name: refund_only
             matches:
               layout: financial_decision
@@ -261,7 +284,8 @@ class TestMatcherFiltering:
                 when: "true"
                 approvers:
                   any_of: [finance_lead]
-        """)
+        """,
+        )
         engine = PolicyEngine(directory)
         engine.load_policies(policies_dir)
 
@@ -272,7 +296,10 @@ class TestMatcherFiltering:
     def test_null_layout_matches_anything(
         self, directory: ApproverDirectory, policies_dir: Path
     ) -> None:
-        _write_policy(policies_dir, "default", """\
+        _write_policy(
+            policies_dir,
+            "default",
+            """\
             name: catch_all
             matches:
               layout: null
@@ -281,7 +308,8 @@ class TestMatcherFiltering:
                 when: "true"
                 approvers:
                   any_of: [finance_lead]
-        """)
+        """,
+        )
         engine = PolicyEngine(directory)
         engine.load_policies(policies_dir)
 
@@ -294,7 +322,10 @@ class TestMultiplePolicies:
     def test_first_matching_policy_wins(
         self, directory: ApproverDirectory, policies_dir: Path
     ) -> None:
-        _write_policy(policies_dir, "01_specific", """\
+        _write_policy(
+            policies_dir,
+            "01_specific",
+            """\
             name: specific_refund
             matches:
               layout: financial_decision
@@ -305,8 +336,12 @@ class TestMultiplePolicies:
                 approvers:
                   any_of: [finance_lead]
                 notify: [slack]
-        """)
-        _write_policy(policies_dir, "02_general", """\
+        """,
+        )
+        _write_policy(
+            policies_dir,
+            "02_general",
+            """\
             name: general_financial
             matches:
               layout: financial_decision
@@ -316,7 +351,8 @@ class TestMultiplePolicies:
                 approvers:
                   any_of: [cfo]
                 notify: [email]
-        """)
+        """,
+        )
         engine = PolicyEngine(directory)
         engine.load_policies(policies_dir)
 
@@ -325,10 +361,11 @@ class TestMultiplePolicies:
         assert plan.matched_policy_name == "specific_refund"
         assert plan.notify_channels == ["slack"]
 
-    def test_no_match_raises(
-        self, directory: ApproverDirectory, policies_dir: Path
-    ) -> None:
-        _write_policy(policies_dir, "refund", """\
+    def test_no_match_raises(self, directory: ApproverDirectory, policies_dir: Path) -> None:
+        _write_policy(
+            policies_dir,
+            "refund",
+            """\
             name: refund_only
             matches:
               layout: financial_decision
@@ -337,7 +374,8 @@ class TestMultiplePolicies:
                 when: "false"
                 approvers:
                   any_of: [finance_lead]
-        """)
+        """,
+        )
         engine = PolicyEngine(directory)
         engine.load_policies(policies_dir)
 
@@ -347,10 +385,11 @@ class TestMultiplePolicies:
 
 
 class TestPolicyHotReload:
-    def test_reload_detects_change(
-        self, directory: ApproverDirectory, policies_dir: Path
-    ) -> None:
-        p = _write_policy(policies_dir, "test", """\
+    def test_reload_detects_change(self, directory: ApproverDirectory, policies_dir: Path) -> None:
+        _write_policy(
+            policies_dir,
+            "test",
+            """\
             name: test_policy
             matches:
               layout: financial_decision
@@ -359,13 +398,17 @@ class TestPolicyHotReload:
                 when: "true"
                 approvers:
                   any_of: [finance_lead]
-        """)
+        """,
+        )
         engine = PolicyEngine(directory)
         engine.load_policies(policies_dir)
         assert engine.policy_count == 1
 
         # Add a second policy
-        _write_policy(policies_dir, "test2", """\
+        _write_policy(
+            policies_dir,
+            "test2",
+            """\
             name: test_policy_2
             matches:
               layout: document_review
@@ -374,15 +417,17 @@ class TestPolicyHotReload:
                 when: "true"
                 approvers:
                   any_of: [cfo]
-        """)
+        """,
+        )
         reloaded = engine.reload()
         assert reloaded is True
         assert engine.policy_count == 2
 
-    def test_reload_no_change(
-        self, directory: ApproverDirectory, policies_dir: Path
-    ) -> None:
-        _write_policy(policies_dir, "test", """\
+    def test_reload_no_change(self, directory: ApproverDirectory, policies_dir: Path) -> None:
+        _write_policy(
+            policies_dir,
+            "test",
+            """\
             name: test_policy
             matches:
               layout: financial_decision
@@ -391,7 +436,8 @@ class TestPolicyHotReload:
                 when: "true"
                 approvers:
                   any_of: [finance_lead]
-        """)
+        """,
+        )
         engine = PolicyEngine(directory)
         engine.load_policies(policies_dir)
         assert engine.reload() is False
@@ -399,7 +445,10 @@ class TestPolicyHotReload:
     def test_reload_invalid_keeps_current(
         self, directory: ApproverDirectory, policies_dir: Path
     ) -> None:
-        p = _write_policy(policies_dir, "test", """\
+        _write_policy(
+            policies_dir,
+            "test",
+            """\
             name: test_policy
             matches:
               layout: financial_decision
@@ -408,12 +457,14 @@ class TestPolicyHotReload:
                 when: "true"
                 approvers:
                   any_of: [finance_lead]
-        """)
+        """,
+        )
         engine = PolicyEngine(directory)
         engine.load_policies(policies_dir)
 
-        # Corrupt the file
-        p.write_text("{ broken yaml [[[")
+        # Corrupt the file — get path from policies_dir
+        policy_file = policies_dir / "test.yaml"
+        policy_file.write_text("{ broken yaml [[[")
         reloaded = engine.reload()
         assert reloaded is False
         assert engine.policy_count == 1
@@ -421,7 +472,10 @@ class TestPolicyHotReload:
     def test_version_hash_changes_on_reload(
         self, directory: ApproverDirectory, policies_dir: Path
     ) -> None:
-        p = _write_policy(policies_dir, "test", """\
+        _write_policy(
+            policies_dir,
+            "test",
+            """\
             name: test_policy
             matches:
               layout: financial_decision
@@ -430,7 +484,8 @@ class TestPolicyHotReload:
                 when: "true"
                 approvers:
                   any_of: [finance_lead]
-        """)
+        """,
+        )
         engine = PolicyEngine(directory)
         engine.load_policies(policies_dir)
 
@@ -439,7 +494,10 @@ class TestPolicyHotReload:
         hash1 = plan1.policy_version_hash
 
         # Modify policy
-        _write_policy(policies_dir, "test", """\
+        _write_policy(
+            policies_dir,
+            "test",
+            """\
             name: test_policy
             matches:
               layout: financial_decision
@@ -448,7 +506,8 @@ class TestPolicyHotReload:
                 when: "true"
                 approvers:
                   any_of: [cfo]
-        """)
+        """,
+        )
         engine.reload()
         plan2 = engine.evaluate(payload)
         assert plan2.policy_version_hash != hash1

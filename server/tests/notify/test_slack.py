@@ -10,8 +10,8 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from deliberate.types import ResolvedApprover
+
 from deliberate_server.notify.base import NotificationContext
 from deliberate_server.notify.slack import SlackNotifier
 
@@ -49,22 +49,28 @@ class TestSlackNotifier:
         mock_client = AsyncMock()
 
         # Mock users.lookupByEmail
-        mock_client.users_lookupByEmail = AsyncMock(return_value={
-            "ok": True,
-            "user": {"id": "U12345"},
-        })
+        mock_client.users_lookupByEmail = AsyncMock(
+            return_value={
+                "ok": True,
+                "user": {"id": "U12345"},
+            }
+        )
 
         # Mock conversations.open
-        mock_client.conversations_open = AsyncMock(return_value={
-            "ok": True,
-            "channel": {"id": "D67890"},
-        })
+        mock_client.conversations_open = AsyncMock(
+            return_value={
+                "ok": True,
+                "channel": {"id": "D67890"},
+            }
+        )
 
         # Mock chat.postMessage
-        mock_client.chat_postMessage = AsyncMock(return_value={
-            "ok": True,
-            "ts": "1234567890.123456",
-        })
+        mock_client.chat_postMessage = AsyncMock(
+            return_value={
+                "ok": True,
+                "ts": "1234567890.123456",
+            }
+        )
 
         notifier._client = mock_client
         with patch("deliberate_server.notify.slack.settings") as mock_settings:
@@ -117,14 +123,18 @@ class TestSlackNotifier:
         notifier = SlackNotifier()
         mock_client = AsyncMock()
 
-        mock_client.users_lookupByEmail = AsyncMock(return_value={
-            "ok": True,
-            "user": {"id": "U12345"},
-        })
-        mock_client.conversations_open = AsyncMock(return_value={
-            "ok": True,
-            "channel": {"id": "D67890"},
-        })
+        mock_client.users_lookupByEmail = AsyncMock(
+            return_value={
+                "ok": True,
+                "user": {"id": "U12345"},
+            }
+        )
+        mock_client.conversations_open = AsyncMock(
+            return_value={
+                "ok": True,
+                "channel": {"id": "D67890"},
+            }
+        )
         mock_client.chat_postMessage = AsyncMock(return_value={"ok": True, "ts": "123"})
 
         notifier._client = mock_client

@@ -30,10 +30,10 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Token types
 # ---------------------------------------------------------------------------
+
 
 class TokenType(Enum):
     NUMBER = auto()
@@ -146,8 +146,8 @@ def tokenize(source: str) -> list[Token]:
         m = _STRING_RE.match(source, i)
         if m:
             # Group 1 is double-quoted content, group 2 is single-quoted
-            value = m.group(1) if m.group(1) is not None else m.group(2)
-            tokens.append(Token(TokenType.STRING, value, i))
+            str_val = m.group(1) if m.group(1) is not None else m.group(2)
+            tokens.append(Token(TokenType.STRING, str_val, i))
             i = m.end()
             continue
 
@@ -155,8 +155,8 @@ def tokenize(source: str) -> list[Token]:
         m = _NUMBER_RE.match(source, i)
         if m:
             text = m.group()
-            value: int | float = float(text) if "." in text else int(text)
-            tokens.append(Token(TokenType.NUMBER, value, i))
+            num_val: int | float = float(text) if "." in text else int(text)
+            tokens.append(Token(TokenType.NUMBER, num_val, i))
             i = m.end()
             continue
 
@@ -188,25 +188,31 @@ def tokenize(source: str) -> list[Token]:
 # AST nodes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class NumberLit:
     value: int | float
+
 
 @dataclass
 class StringLit:
     value: str
 
+
 @dataclass
 class BoolLit:
     value: bool
+
 
 @dataclass
 class NullLit:
     pass
 
+
 @dataclass
 class FieldAccess:
     parts: list[str]  # e.g. ["amount", "value"]
+
 
 @dataclass
 class BinOp:
@@ -214,20 +220,24 @@ class BinOp:
     left: Any  # AST node
     right: Any
 
+
 @dataclass
 class ContainsOp:
     left: Any
     right: Any
+
 
 @dataclass
 class AndOp:
     left: Any
     right: Any
 
+
 @dataclass
 class OrOp:
     left: Any
     right: Any
+
 
 @dataclass
 class NotOp:
@@ -235,12 +245,24 @@ class NotOp:
 
 
 # Type alias for AST nodes
-ASTNode = NumberLit | StringLit | BoolLit | NullLit | FieldAccess | BinOp | ContainsOp | AndOp | OrOp | NotOp
+ASTNode = (
+    NumberLit
+    | StringLit
+    | BoolLit
+    | NullLit
+    | FieldAccess
+    | BinOp
+    | ContainsOp
+    | AndOp
+    | OrOp
+    | NotOp
+)
 
 
 # ---------------------------------------------------------------------------
 # Parser
 # ---------------------------------------------------------------------------
+
 
 class ParseError(Exception):
     """Raised when the parser encounters a syntax error."""
@@ -302,7 +324,14 @@ class Parser:
 
     def _comparison(self) -> ASTNode:
         left = self._contains_expr()
-        comp_ops = {TokenType.LT, TokenType.GT, TokenType.LE, TokenType.GE, TokenType.EQ, TokenType.NE}
+        comp_ops = {
+            TokenType.LT,
+            TokenType.GT,
+            TokenType.LE,
+            TokenType.GE,
+            TokenType.EQ,
+            TokenType.NE,
+        }
         if self._current().type in comp_ops:
             op_tok = self._advance()
             right = self._contains_expr()

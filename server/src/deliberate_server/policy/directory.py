@@ -7,15 +7,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
 import threading
 from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import ValidationError
-
 from deliberate.types import ApproverDirectoryConfig, ApproverEntry, ResolvedApprover
+from pydantic import ValidationError
 
 logger = logging.getLogger("deliberate_server.policy.directory")
 
@@ -89,9 +87,7 @@ class ApproverDirectory:
             # Validate all members exist
             for member_id in group.members:
                 if member_id not in approvers:
-                    msg = (
-                        f"Group '{group.id}' references unknown approver '{member_id}' in {path}"
-                    )
+                    msg = f"Group '{group.id}' references unknown approver '{member_id}' in {path}"
                     raise ApproverDirectoryError(msg)
             groups[group.id] = group.members
 
@@ -132,9 +128,7 @@ class ApproverDirectory:
             logger.info("Hot-reloaded approver directory from %s", self._file_path)
             return True
         except ApproverDirectoryError as e:
-            logger.warning(
-                "Failed to hot-reload approver directory (keeping current state): %s", e
-            )
+            logger.warning("Failed to hot-reload approver directory (keeping current state): %s", e)
             return False
 
     def resolve(self, ref: str) -> list[ResolvedApprover]:

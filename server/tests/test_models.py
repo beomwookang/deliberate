@@ -8,7 +8,6 @@ from deliberate_server.db.models import (
     Decision,
     Interrupt,
     LedgerEntry,
-    NotificationAttempt,
 )
 
 

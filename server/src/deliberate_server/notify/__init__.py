@@ -21,8 +21,6 @@ notification_dispatcher = NotificationDispatcher()
 
 def init_notification_system() -> None:
     """Register all notification adapters. Called at application startup."""
-    from deliberate_server.config import settings
-
     # Email adapter — always registered, fails gracefully if SMTP not configured
     notification_dispatcher.register(EmailNotifier())
 

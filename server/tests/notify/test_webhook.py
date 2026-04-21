@@ -8,13 +8,12 @@ import json
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import ClassVar
 from unittest.mock import patch
 
 import httpx
 import pytest
-
 from deliberate.types import ResolvedApprover
+
 from deliberate_server.notify.base import NotificationContext
 from deliberate_server.notify.webhook import WebhookConfig, WebhookNotifier, _sign_payload
 
@@ -56,16 +55,22 @@ class TestWebhookNotifier:
     async def test_successful_delivery(self) -> None:
         notifier = WebhookNotifier()
         notifier._configs = [
-            WebhookConfig(id="test-hook", url="http://httpbin.test/post", secret_env="TEST_WH_SECRET")
+            WebhookConfig(
+                id="test-hook",
+                url="http://httpbin.test/post",
+                secret_env="TEST_WH_SECRET",
+            )
         ]
         ctx = _make_ctx()
 
         with patch.dict(os.environ, {"TEST_WH_SECRET": "test-secret-123"}):
-            # Mock httpx to avoid real network calls
-            async def mock_post(url: str, content: bytes, headers: dict) -> httpx.Response:
-                # Verify signature is present
+
+            async def mock_post(
+                url: str,
+                content: bytes,
+                headers: dict,
+            ) -> httpx.Response:
                 assert "X-Deliberate-Signature" in headers
-                # Verify payload structure
                 payload = json.loads(content)
                 assert payload["event"] == "approval.requested"
                 assert payload["approval_id"] == str(ctx.approval_id)
@@ -86,7 +91,6 @@ class TestWebhookNotifier:
         ]
         ctx = _make_ctx()
 
-        # Ensure the env var is NOT set
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("MISSING_SECRET", None)
             result = await notifier.send(ctx)
@@ -100,14 +104,12 @@ class TestWebhookNotifier:
         notifier._configs = []
         ctx = _make_ctx()
         result = await notifier.send(ctx)
-        assert result.success is True  # No webhooks = nothing to fail
+        assert result.success is True
 
     @pytest.mark.asyncio
     async def test_4xx_no_retry(self) -> None:
         notifier = WebhookNotifier()
-        notifier._configs = [
-            WebhookConfig(id="bad", url="http://test/post", secret_env="WH_SEC")
-        ]
+        notifier._configs = [WebhookConfig(id="bad", url="http://test/post", secret_env="WH_SEC")]
         ctx = _make_ctx()
         call_count = 0
 
@@ -116,12 +118,14 @@ class TestWebhookNotifier:
             call_count += 1
             return httpx.Response(400, text="Bad Request")
 
-        with patch.dict(os.environ, {"WH_SEC": "secret"}):
-            with patch("httpx.AsyncClient.post", side_effect=mock_post):
-                result = await notifier.send(ctx)
+        with (
+            patch.dict(os.environ, {"WH_SEC": "secret"}),
+            patch("httpx.AsyncClient.post", side_effect=mock_post),
+        ):
+            result = await notifier.send(ctx)
 
         assert result.success is False
-        assert call_count == 1  # No retry on 4xx
+        assert call_count == 1
 
     @pytest.mark.asyncio
     async def test_payload_structure(self) -> None:
@@ -137,9 +141,11 @@ class TestWebhookNotifier:
             captured_payload = json.loads(content)
             return httpx.Response(200, text="OK")
 
-        with patch.dict(os.environ, {"WH_SEC": "secret"}):
-            with patch("httpx.AsyncClient.post", side_effect=mock_post):
-                await notifier.send(ctx)
+        with (
+            patch.dict(os.environ, {"WH_SEC": "secret"}),
+            patch("httpx.AsyncClient.post", side_effect=mock_post),
+        ):
+            await notifier.send(ctx)
 
         assert captured_payload is not None
         assert captured_payload["event"] == "approval.requested"
@@ -167,9 +173,11 @@ class TestWebhookNotifier:
             return httpx.Response(200)
 
         secret = "verify-this-secret"
-        with patch.dict(os.environ, {"WH_SEC": secret}):
-            with patch("httpx.AsyncClient.post", side_effect=mock_post):
-                await notifier.send(ctx)
+        with (
+            patch.dict(os.environ, {"WH_SEC": secret}),
+            patch("httpx.AsyncClient.post", side_effect=mock_post),
+        ):
+            await notifier.send(ctx)
 
         assert captured_body is not None
         assert captured_sig is not None

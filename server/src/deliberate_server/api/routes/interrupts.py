@@ -103,13 +103,9 @@ async def submit_interrupt(
     interrupt_id = uuid.uuid4()
 
     if plan.action == "auto_approve":
-        return await _handle_auto_approve(
-            body, app_row, validated_payload, plan, interrupt_id, now
-        )
+        return await _handle_auto_approve(body, app_row, validated_payload, plan, interrupt_id, now)
 
-    return await _handle_request_human(
-        body, app_row, validated_payload, plan, interrupt_id, now
-    )
+    return await _handle_request_human(body, app_row, validated_payload, plan, interrupt_id, now)
 
 
 def _evaluate_policy(payload: dict[str, Any]) -> ResolvedPlan:
@@ -306,6 +302,8 @@ async def _handle_request_human(
                     status_code=500,
                     detail="Policy resolved to request_human but no approvers specified",
                 )
+
+    assert approval_id is not None  # Narrowing: either branch sets it or raises
 
     # Log the approval URL with grep-friendly prefix
     approval_url = f"{settings.ui_url}/a/{approval_id}"

@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import pytest
 
-from deliberate_server.policy.evaluator import MISSING, evaluate
+from deliberate_server.policy.evaluator import evaluate
 from deliberate_server.policy.parser import ParseError, TokenizeError, parse_expression
-
 
 # ---------------------------------------------------------------------------
 # Helper: parse + evaluate in one step
 # ---------------------------------------------------------------------------
+
 
 def _eval(expr: str, payload: dict) -> object:
     ast = parse_expression(expr)
@@ -24,6 +24,7 @@ def _eval(expr: str, payload: dict) -> object:
 # ---------------------------------------------------------------------------
 # Comparison operators
 # ---------------------------------------------------------------------------
+
 
 class TestComparisonOperators:
     PAYLOAD = {"amount": {"value": 750.0, "currency": "USD"}, "count": 5}
@@ -75,6 +76,7 @@ class TestComparisonOperators:
 # Boolean operators
 # ---------------------------------------------------------------------------
 
+
 class TestBooleanOperators:
     PAYLOAD = {"amount": {"value": 750.0}, "active": True, "deleted": False}
 
@@ -97,22 +99,24 @@ class TestBooleanOperators:
         assert _eval("not active", self.PAYLOAD) is False
 
     def test_complex_boolean(self) -> None:
-        assert _eval(
-            "amount.value >= 100 and amount.value < 5000 and not deleted", self.PAYLOAD
-        ) is True
+        assert (
+            _eval("amount.value >= 100 and amount.value < 5000 and not deleted", self.PAYLOAD)
+            is True
+        )
 
     def test_parenthesized(self) -> None:
         assert _eval("(amount.value < 100) or (amount.value > 500)", self.PAYLOAD) is True
 
     def test_nested_parens(self) -> None:
-        assert _eval(
-            "(amount.value > 100 and amount.value < 1000) or deleted", self.PAYLOAD
-        ) is True
+        assert (
+            _eval("(amount.value > 100 and amount.value < 1000) or deleted", self.PAYLOAD) is True
+        )
 
 
 # ---------------------------------------------------------------------------
 # Contains operator
 # ---------------------------------------------------------------------------
+
 
 class TestContainsOperator:
     def test_string_contains_true(self) -> None:
@@ -140,6 +144,7 @@ class TestContainsOperator:
 # Union-type handling (agent_reasoning as string vs structured object)
 # Per Correction 3: missing field access → false, not error.
 # ---------------------------------------------------------------------------
+
 
 class TestUnionTypeHandling:
     """PRD §5.2 Draft v4: expression evaluator semantics for union types."""
@@ -214,6 +219,7 @@ class TestUnionTypeHandling:
 # Literals and edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestLiteralsAndEdgeCases:
     def test_true_literal(self) -> None:
         assert _eval("true", {}) is True
@@ -253,6 +259,7 @@ class TestLiteralsAndEdgeCases:
 # ---------------------------------------------------------------------------
 # Parse errors
 # ---------------------------------------------------------------------------
+
 
 class TestParseErrors:
     def test_empty_expression(self) -> None:

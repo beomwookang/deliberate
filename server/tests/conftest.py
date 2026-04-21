@@ -42,7 +42,15 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
         await conn.run_sync(Base.metadata.create_all)
 
     async with engine.begin() as conn:
-        for tbl in ("notification_attempts", "ledger_entries", "decisions", "approvals", "interrupts", "approvers"):
+        tables = (
+            "notification_attempts",
+            "ledger_entries",
+            "decisions",
+            "approvals",
+            "interrupts",
+            "approvers",
+        )
+        for tbl in tables:
             await conn.execute(text(f"DELETE FROM {tbl}"))
         await conn.execute(text("DELETE FROM applications"))
         key_hash = hash_api_key("test-api-key")

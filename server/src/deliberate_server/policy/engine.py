@@ -9,12 +9,12 @@ from __future__ import annotations
 import hashlib
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
+from deliberate.types import ResolvedApprover
 from pydantic import ValidationError
 
-from deliberate.types import ResolvedApprover
 from deliberate_server.policy.directory import ApproverDirectory, ApproverNotFoundError
 from deliberate_server.policy.evaluator import evaluate
 from deliberate_server.policy.parser import ParseError, parse_expression
@@ -222,9 +222,9 @@ class PolicyEngine:
         """Check if the interrupt matches the policy's matcher block."""
         if matcher.layout is not None and matcher.layout != layout:
             return False
-        if matcher.subject_contains is not None and matcher.subject_contains not in subject:
-            return False
-        return True
+        return not (
+            matcher.subject_contains is not None and matcher.subject_contains not in subject
+        )
 
     def _build_plan(self, rule: Rule, policy_name: str, file_hash: str) -> ResolvedPlan:
         """Build a ResolvedPlan from a matched rule."""
@@ -239,7 +239,7 @@ class PolicyEngine:
 
         # Human approval required
         approvers: list[ResolvedApprover] = []
-        approval_mode: str = "any_of"
+        approval_mode: Literal["any_of", "all_of"] = "any_of"
 
         if rule.approvers:
             if rule.approvers.any_of:
@@ -261,7 +261,7 @@ class PolicyEngine:
             matched_rule_name=rule.name,
             policy_version_hash=file_hash,
             approvers=approvers,
-            approval_mode=approval_mode,  # type: ignore[arg-type]
+            approval_mode=approval_mode,
             timeout_seconds=timeout_seconds,
             notify_channels=rule.notify,
             require_rationale=rule.require_rationale,

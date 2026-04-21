@@ -9,9 +9,8 @@ from datetime import datetime
 from typing import ClassVar, Protocol, runtime_checkable
 from uuid import UUID
 
-from pydantic import BaseModel
-
 from deliberate.types import ResolvedApprover
+from pydantic import BaseModel
 
 
 class NotificationContext(BaseModel):

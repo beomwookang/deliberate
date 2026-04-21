@@ -169,9 +169,7 @@ class NotificationAttempt(Base):
         DateTime(timezone=True), nullable=False, server_default=text("NOW()")
     )
 
-    __table_args__ = (
-        Index("idx_notifications_approval", "application_id", "approval_id"),
-    )
+    __table_args__ = (Index("idx_notifications_approval", "application_id", "approval_id"),)
 
 
 class Approver(Base):

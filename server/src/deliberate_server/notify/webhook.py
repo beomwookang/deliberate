@@ -107,13 +107,10 @@ class WebhookNotifier:
         errors: list[str] = []
 
         async with httpx.AsyncClient(timeout=WEBHOOK_TIMEOUT) as client:
-            tasks = [
-                self._send_to_webhook(client, wh, body)
-                for wh in self._configs
-            ]
+            tasks = [self._send_to_webhook(client, wh, body) for wh in self._configs]
             webhook_results = await asyncio.gather(*tasks)
 
-        for wh, (success, error) in zip(self._configs, webhook_results):
+        for wh, (success, error) in zip(self._configs, webhook_results, strict=True):
             results.append(success)
             if not success and error:
                 errors.append(f"{wh.id}: {error}")
@@ -180,7 +177,7 @@ class WebhookNotifier:
                     attempt + 1,
                     MAX_RETRIES,
                 )
-            except (httpx.HTTPError, asyncio.TimeoutError) as e:
+            except (TimeoutError, httpx.HTTPError) as e:
                 last_error = str(e)
                 logger.warning(
                     "Webhook '%s' request failed (attempt %d/%d): %s",
@@ -191,7 +188,7 @@ class WebhookNotifier:
                 )
 
             if attempt < MAX_RETRIES - 1:
-                await asyncio.sleep(RETRY_BACKOFF_BASE ** attempt)
+                await asyncio.sleep(RETRY_BACKOFF_BASE**attempt)
 
         return False, f"Failed after {MAX_RETRIES} attempts: {last_error}"
 

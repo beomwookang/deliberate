@@ -14,7 +14,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from deliberate.types import ResolvedApprover
 from deliberate_server.db.models import NotificationAttempt
 from deliberate_server.db.session import async_session
 from deliberate_server.notify.base import (
@@ -117,9 +116,7 @@ class NotificationDispatcher:
         if failures > 0:
             for r in results_list:
                 if not r.success:
-                    logger.warning(
-                        "Notification failed: channel=%s, error=%s", r.channel, r.error
-                    )
+                    logger.warning("Notification failed: channel=%s, error=%s", r.channel, r.error)
 
         return results_list
 

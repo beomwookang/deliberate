@@ -123,13 +123,13 @@ def evaluate(node: ASTNode, payload: dict[str, Any]) -> Any:
         op = node.op
         try:
             if op == "<":
-                return left < right  # type: ignore[operator]
+                return left < right
             if op == ">":
-                return left > right  # type: ignore[operator]
+                return left > right
             if op == "<=":
-                return left <= right  # type: ignore[operator]
+                return left <= right
             if op == ">=":
-                return left >= right  # type: ignore[operator]
+                return left >= right
             if op == "==":
                 return left == right
             if op == "!=":

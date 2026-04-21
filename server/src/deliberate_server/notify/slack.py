@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import time
-from functools import lru_cache
 from typing import Any, ClassVar
 
 from slack_sdk.errors import SlackApiError
@@ -69,7 +68,7 @@ class SlackNotifier:
             # Open a DM channel
             dm_resp = await client.conversations_open(users=[user_id])
             if not dm_resp["ok"]:
-                raise SlackApiError("conversations.open failed", dm_resp)
+                raise SlackApiError("conversations.open failed", dm_resp)  # type: ignore[no-untyped-call]  # slack_sdk lacks type stubs
             channel_id = dm_resp["channel"]["id"]
 
             # Send the message with Block Kit
@@ -141,10 +140,10 @@ class SlackNotifier:
         try:
             resp = await client.users_lookupByEmail(email=email)
             if resp["ok"]:
-                user_id = resp["user"]["id"]
-                self._user_cache[email] = user_id
+                found_id: str = str(resp["user"]["id"])
+                self._user_cache[email] = found_id
                 self._cache_timestamps[email] = now
-                return user_id
+                return found_id
             self._user_cache[email] = None
             self._cache_timestamps[email] = now
             return None
@@ -166,7 +165,7 @@ class SlackNotifier:
             return False
         try:
             resp = await client.auth_test()
-            return resp["ok"]
+            return bool(resp["ok"])
         except SlackApiError:
             return False
 
@@ -203,56 +202,62 @@ class SlackNotifier:
             if text:
                 if len(text) > 300:
                     text = text[:300] + "..."
-                blocks.append({
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": text},
-                })
+                blocks.append(
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": text},
+                    }
+                )
 
         # Amount if present
         amount = ctx.payload_preview.get("amount")
         if isinstance(amount, dict) and "value" in amount:
             currency = amount.get("currency", "USD")
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*Amount:* {currency} {amount['value']}",
-                },
-            })
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Amount:* {currency} {amount['value']}",
+                    },
+                }
+            )
 
         # Review button
-        blocks.append({
-            "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
-                    "text": {
-                        "type": "plain_text",
-                        "text": "Review and decide",
-                        "emoji": True,
-                    },
-                    "url": ctx.approval_url,
-                    "style": "primary",
-                    "action_id": "review_approval",
-                }
-            ],
-        })
+        blocks.append(
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Review and decide",
+                            "emoji": True,
+                        },
+                        "url": ctx.approval_url,
+                        "style": "primary",
+                        "action_id": "review_approval",
+                    }
+                ],
+            }
+        )
 
         # Context footer
         approver_name = ctx.approver.display_name or ctx.approver.email
         context_parts = [f"Assigned to {approver_name}"]
         if ctx.expires_at:
-            context_parts.append(
-                f"Expires {ctx.expires_at.strftime('%Y-%m-%d %H:%M UTC')}"
-            )
-        blocks.append({
-            "type": "context",
-            "elements": [
-                {
-                    "type": "mrkdwn",
-                    "text": " · ".join(context_parts),
-                }
-            ],
-        })
+            context_parts.append(f"Expires {ctx.expires_at.strftime('%Y-%m-%d %H:%M UTC')}")
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": " · ".join(context_parts),
+                    }
+                ],
+            }
+        )
 
         return blocks

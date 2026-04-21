@@ -46,7 +46,7 @@ class EmailNotifier:
         last_error: str | None = None
         for attempt in range(MAX_RETRIES):
             try:
-                response = await aiosmtplib.send(
+                await aiosmtplib.send(
                     msg,
                     hostname=settings.smtp_host,
                     port=settings.smtp_port,
@@ -80,7 +80,7 @@ class EmailNotifier:
                     error=f"SMTP authentication failed: {e}",
                     duration_ms=duration,
                 )
-            except (aiosmtplib.SMTPException, OSError, asyncio.TimeoutError) as e:
+            except (TimeoutError, aiosmtplib.SMTPException, OSError) as e:
                 last_error = str(e)
                 logger.warning(
                     "SMTP send attempt %d/%d failed for %s: %s",
@@ -90,7 +90,7 @@ class EmailNotifier:
                     e,
                 )
                 if attempt < MAX_RETRIES - 1:
-                    await asyncio.sleep(RETRY_BACKOFF_BASE ** attempt)
+                    await asyncio.sleep(RETRY_BACKOFF_BASE**attempt)
 
         duration = int((time.monotonic() - start) * 1000)
         return NotificationResult(
@@ -117,7 +117,8 @@ class EmailNotifier:
         reasoning = ctx.payload_preview.get("agent_reasoning")
         if reasoning:
             if isinstance(reasoning, dict) and "summary" in reasoning:
-                reasoning_html = f"<p><strong>Agent reasoning:</strong> {_escape(str(reasoning['summary']))}</p>"
+                summary = _escape(str(reasoning["summary"]))
+                reasoning_html = f"<p><strong>Agent reasoning:</strong> {summary}</p>"
                 reasoning_text = f"Agent reasoning: {reasoning['summary']}"
             elif isinstance(reasoning, str):
                 reasoning_html = f"<p><strong>Agent reasoning:</strong> {_escape(reasoning)}</p>"
@@ -146,37 +147,53 @@ Review and decide: {ctx.approval_url}
 {expires_text}
 This is an approval request from Deliberate."""
 
-        # HTML version
-        html = f"""<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="border-bottom: 3px solid #2563eb; padding-bottom: 16px; margin-bottom: 24px;">
-    <h2 style="margin: 0; color: #1e293b;">{_escape(ctx.subject)}</h2>
-  </div>
+        # HTML version — inline styles required for email client compatibility
+        body_style = (
+            "font-family: -apple-system, BlinkMacSystemFont, "
+            "'Segoe UI', Roboto, sans-serif; "
+            "max-width: 600px; margin: 0 auto; padding: 20px;"
+        )
+        header_style = (
+            "border-bottom: 3px solid #2563eb; padding-bottom: 16px; margin-bottom: 24px;"
+        )
+        btn_style = (
+            "display: inline-block; padding: 14px 32px; "
+            "color: #ffffff; text-decoration: none; "
+            "font-weight: 600; font-size: 16px;"
+        )
+        footer_style = (
+            "margin-top: 32px; padding-top: 16px; "
+            "border-top: 1px solid #e2e8f0; "
+            "color: #64748b; font-size: 13px;"
+        )
+        expires_html = ""
+        if expires_text:
+            expires_html = f" {expires_text}."
 
-  {amount_html}
-  {reasoning_html}
-
-  <div style="margin: 32px 0; text-align: center;">
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
-      <tr>
-        <td style="border-radius: 6px; background-color: #2563eb;">
-          <a href="{ctx.approval_url}"
-             style="display: inline-block; padding: 14px 32px; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 16px;"
-             target="_blank">
-            Review and decide
-          </a>
-        </td>
-      </tr>
-    </table>
-  </div>
-
-  <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 13px;">
-    <p>This is an approval request from Deliberate.{(' ' + expires_text + '.') if expires_text else ''}</p>
-  </div>
-</body>
-</html>"""
+        html = (
+            f'<!DOCTYPE html>\n<html>\n<head><meta charset="utf-8"></head>\n'
+            f'<body style="{body_style}">\n'
+            f'  <div style="{header_style}">\n'
+            f'    <h2 style="margin: 0; color: #1e293b;">'
+            f"{_escape(ctx.subject)}</h2>\n"
+            f"  </div>\n\n"
+            f"  {amount_html}\n  {reasoning_html}\n\n"
+            f'  <div style="margin: 32px 0; text-align: center;">\n'
+            f'    <table role="presentation" cellspacing="0" '
+            f'cellpadding="0" border="0" align="center">\n'
+            f"      <tr>\n"
+            f'        <td style="border-radius: 6px; '
+            f'background-color: #2563eb;">\n'
+            f'          <a href="{ctx.approval_url}" '
+            f'style="{btn_style}" target="_blank">\n'
+            f"            Review and decide\n"
+            f"          </a>\n        </td>\n      </tr>\n"
+            f"    </table>\n  </div>\n\n"
+            f'  <div style="{footer_style}">\n'
+            f"    <p>This is an approval request from Deliberate."
+            f"{expires_html}</p>\n"
+            f"  </div>\n</body>\n</html>"
+        )
 
         msg.attach(MIMEText(plain, "plain", "utf-8"))
         msg.attach(MIMEText(html, "html", "utf-8"))

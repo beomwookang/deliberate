@@ -17,10 +17,10 @@ from deliberate_server.policy.engine import NoMatchingPolicyError, PolicyEngine,
 from deliberate_server.policy.evaluator import evaluate
 from deliberate_server.policy.parser import ParseError, TokenizeError, parse_expression
 
-
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
+
 
 def _eval(expr: str, payload: dict) -> object:
     ast = parse_expression(expr)
@@ -30,6 +30,7 @@ def _eval(expr: str, payload: dict) -> object:
 # ---------------------------------------------------------------------------
 # B1 — Parser rejects dangerous input
 # ---------------------------------------------------------------------------
+
 
 class TestB1ParserRejectsDangerous:
     """Each of these MUST raise ParseError or TokenizeError, never evaluate."""
@@ -108,6 +109,7 @@ class TestB1ParserRejectsDangerous:
 # ---------------------------------------------------------------------------
 # B2 — Evaluator edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestB2EvaluatorEdgeCases:
     def test_deeply_nested_field(self) -> None:
@@ -210,6 +212,7 @@ class TestB2EvaluatorEdgeCases:
 # B3 — Policy matching edge cases
 # ---------------------------------------------------------------------------
 
+
 def _make_directory(tmp_path: Path) -> ApproverDirectory:
     content = textwrap.dedent("""\
         approvers:
@@ -245,7 +248,8 @@ class TestB3PolicyMatchingEdgeCases:
         policies_dir = tmp_path / "policies"
         policies_dir.mkdir()
 
-        (policies_dir / "good.yaml").write_text(textwrap.dedent("""\
+        (policies_dir / "good.yaml").write_text(
+            textwrap.dedent("""\
             name: good
             matches:
               layout: test
@@ -254,7 +258,8 @@ class TestB3PolicyMatchingEdgeCases:
                 when: "true"
                 approvers:
                   any_of: [alice]
-        """))
+        """)
+        )
         (policies_dir / "bad.yaml").write_text("{ broken [[[")
 
         engine = PolicyEngine(d)
@@ -267,7 +272,8 @@ class TestB3PolicyMatchingEdgeCases:
         policies_dir = tmp_path / "policies"
         policies_dir.mkdir()
 
-        (policies_dir / "01_first.yaml").write_text(textwrap.dedent("""\
+        (policies_dir / "01_first.yaml").write_text(
+            textwrap.dedent("""\
             name: first_policy
             matches:
               layout: financial_decision
@@ -276,8 +282,10 @@ class TestB3PolicyMatchingEdgeCases:
                 when: "true"
                 approvers:
                   any_of: [alice]
-        """))
-        (policies_dir / "02_second.yaml").write_text(textwrap.dedent("""\
+        """)
+        )
+        (policies_dir / "02_second.yaml").write_text(
+            textwrap.dedent("""\
             name: second_policy
             matches:
               layout: financial_decision
@@ -286,7 +294,8 @@ class TestB3PolicyMatchingEdgeCases:
                 when: "true"
                 approvers:
                   any_of: [bob]
-        """))
+        """)
+        )
 
         engine = PolicyEngine(d)
         engine.load_policies(policies_dir)
@@ -299,13 +308,16 @@ class TestB3PolicyMatchingEdgeCases:
         policies_dir = tmp_path / "policies"
         policies_dir.mkdir()
 
-        (policies_dir / "empty.yaml").write_text(textwrap.dedent("""\
+        (policies_dir / "empty.yaml").write_text(
+            textwrap.dedent("""\
             name: empty_rules
             matches:
               layout: financial_decision
             rules: []
-        """))
-        (policies_dir / "fallback.yaml").write_text(textwrap.dedent("""\
+        """)
+        )
+        (policies_dir / "fallback.yaml").write_text(
+            textwrap.dedent("""\
             name: fallback
             matches:
               layout: null
@@ -314,7 +326,8 @@ class TestB3PolicyMatchingEdgeCases:
                 when: "true"
                 approvers:
                   any_of: [alice]
-        """))
+        """)
+        )
 
         engine = PolicyEngine(d)
         engine.load_policies(policies_dir)
@@ -326,7 +339,8 @@ class TestB3PolicyMatchingEdgeCases:
         policies_dir = tmp_path / "policies"
         policies_dir.mkdir()
 
-        (policies_dir / "bad_ref.yaml").write_text(textwrap.dedent("""\
+        (policies_dir / "bad_ref.yaml").write_text(
+            textwrap.dedent("""\
             name: bad_ref
             matches:
               layout: test
@@ -335,7 +349,8 @@ class TestB3PolicyMatchingEdgeCases:
                 when: "true"
                 approvers:
                   any_of: [nonexistent_person]
-        """))
+        """)
+        )
 
         engine = PolicyEngine(d)
         with pytest.raises(PolicyLoadError, match="unknown approver"):

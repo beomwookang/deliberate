@@ -8,9 +8,8 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
-
 from deliberate.types import ResolvedApprover
+from pydantic import BaseModel, Field
 
 
 class Matcher(BaseModel):
@@ -46,7 +45,7 @@ class Rule(BaseModel):
     on_timeout: Literal["escalate", "fail"] | None = None
     escalate_to: str | None = None
     require_rationale: bool = False
-    notify: list[Literal["email", "webhook", "slack"]] = Field(default_factory=lambda: ["email"])
+    notify: list[Literal["email", "webhook", "slack"]] = Field(default=["email"])
 
 
 class Policy(BaseModel):
