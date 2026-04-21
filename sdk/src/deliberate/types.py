@@ -68,6 +68,19 @@ class DecisionOption(BaseModel):
     fields: list[str] | None = None
 
 
+class AgentReasoningStructured(BaseModel):
+    """Structured form of agent reasoning (PRD §5.1 v3).
+
+    Use when reasoning is complex enough to benefit from bullet points.
+    The UI renders summary prominently, points[] as a list, and uses
+    confidence to visually flag low-evidence decisions.
+    """
+
+    summary: str
+    points: list[str] | None = None
+    confidence: str | None = None  # "high" | "medium" | "low"
+
+
 class InterruptPayload(BaseModel):
     """What the SDK captures when a LangGraph node calls interrupt() inside an @approval_gate.
 
@@ -81,7 +94,7 @@ class InterruptPayload(BaseModel):
     # Layout-specific fields — passed through to the layout component
     amount: MoneyAmount | None = None
     customer: dict[str, Any] | None = None
-    agent_reasoning: str | None = None
+    agent_reasoning: str | AgentReasoningStructured | None = None
     evidence: list[Evidence] | None = None
 
     # Decision mechanics
