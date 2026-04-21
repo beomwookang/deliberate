@@ -5,9 +5,12 @@ See PRD §6.7 for the expected environment variables.
 
 from __future__ import annotations
 
+import logging
 import sys
 
 from pydantic_settings import BaseSettings
+
+logger = logging.getLogger("deliberate_server.config")
 
 
 class Settings(BaseSettings):
@@ -21,11 +24,16 @@ class Settings(BaseSettings):
     server_host: str = "0.0.0.0"
     server_port: int = 4000
 
-    # M1: single approver from env var (no policy engine yet)
+    # M1 fallback: single approver from env var (deprecated — use policies)
     default_approver_email: str = ""
 
-    # UI URL for constructing approval links in logs
+    # UI URL for constructing approval links
     ui_url: str = "http://localhost:3000"
+
+    # Policy engine (M2a)
+    approvers_file: str = "config/approvers.yaml"  # DELIBERATE_APPROVERS_FILE
+    policies_dir: str = "config/policies"  # DELIBERATE_POLICIES_DIR
+    webhooks_file: str = "config/webhooks.yaml"  # DELIBERATE_WEBHOOKS_FILE
 
     # Slack (optional)
     slack_bot_token: str = ""
@@ -37,12 +45,11 @@ class Settings(BaseSettings):
     smtp_username: str = ""
     smtp_password: str = ""
     smtp_from_email: str = "noreply@example.com"
+    smtp_from_name: str = "Deliberate"
+    smtp_use_tls: bool = True
 
-    # Webhook (optional)
+    # Webhook (optional — per-webhook secrets are in webhooks.yaml)
     webhook_signing_secret: str = ""
-
-    # Policy
-    policy_directory: str = "policies"
 
     # Worker
     worker_poll_interval_seconds: int = 15
@@ -60,11 +67,12 @@ def get_settings() -> Settings:
             file=sys.stderr,
         )
         sys.exit(1)
-    if not s.default_approver_email:
-        print(
-            "WARNING: DELIBERATE_DEFAULT_APPROVER_EMAIL is not set. "
-            "M1 requires a single approver email in this env var.",
-            file=sys.stderr,
+    if s.default_approver_email:
+        logger.warning(
+            "DEFAULT_APPROVER_EMAIL is deprecated. "
+            "Use YAML policies in %s instead. "
+            "The env var fallback will be removed in v0.3.0.",
+            s.policies_dir,
         )
     return s
 
