@@ -1,10 +1,6 @@
 <div align="center">
 
-<!-- TODO: Add banner image at docs/assets/banner.png -->
-
-# Deliberate
-
-### The approval layer for LangGraph agents
+<img src="./docs/assets/banner.png" alt="Deliberate — The approval layer for LangGraph agents" width="720"/>
 
 [**Quickstart**](./docs/quickstart.md) · [**Docs**](./docs/) · [**Discord**](https://discord.gg/yWzARrn8Z3) · [**Report a bug**](https://github.com/beomwookang/deliberate/issues)
 
