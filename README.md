@@ -6,7 +6,7 @@
 
 ### The approval layer for LangGraph agents
 
-[**Quickstart**](./docs/quickstart.md) · [**Docs**](./docs/) · [**Report a bug**](https://github.com/beomwookang/deliberate/issues)
+[**Quickstart**](./docs/quickstart.md) · [**Docs**](./docs/) · [**Discord**](https://discord.gg/yWzARrn8Z3) · [**Report a bug**](https://github.com/beomwookang/deliberate/issues)
 
 ![MIT License](https://img.shields.io/badge/License-MIT-E11311.svg)
 ![GitHub Stars](https://img.shields.io/github/stars/beomwookang/deliberate?style=social)
@@ -15,7 +15,6 @@ Your LangGraph agent calls `interrupt()`. Now what?
 
 Deliberate turns it into an approval request a non-engineer can actually answer — with notifications, timeouts, structured audit trails, and UIs built for the people who actually sign off.
 
-<!-- TODO: Add hero GIF at docs/assets/hero.gif showing the approval flow -->
 
 </div>
 
@@ -84,16 +83,60 @@ See the [full quickstart](./docs/quickstart.md) or grab a [working example](./ex
 
 Different decisions need different information architecture. A finance lead approving a refund doesn't need the same layout as a legal reviewer redlining a contract. Deliberate ships with 6 layouts tuned for the domains where HITL matters most.
 
-| Layout | Use case | Key elements |
-|--------|----------|-------------|
-| `financial_decision` | Refunds, expense approvals, budget requests | Amount card, customer info, evidence table |
-| `document_review` | Contracts, policies, legal redlines | Document link, flagged clauses, clause highlights |
-| `procedure_signoff` | Audit steps, compliance checks, quality gates | Checklist with pass/fail, exceptions, standards ref |
-| `data_access` | Sensitive data access, export approvals | Resource/scope, risk level badge, requester info |
-| `content_moderation` | Generated-content review, publish approvals | Content preview, flagged items, policy references |
-| `code_deployment` | Automated deploys, infra changes | Diff summary, test results bar, rollback plan |
+<table>
+<tr>
+<td width="33%">
 
-<!-- TODO: Add screenshot for each layout in docs/assets/layout-*.png -->
+### `financial_decision`
+Refunds, expense approvals, budget requests. Leads with amount and evidence.
+
+<img src="./docs/assets/layout-financial.png" alt="financial_decision layout" width="300"/>
+
+</td>
+<td width="33%">
+
+### `document_review`
+Contracts, policies, legal redlines. Leads with the document and flagged clauses.
+
+<img src="./docs/assets/layout-document.png" alt="document_review layout" width="300"/>
+
+</td>
+<td width="33%">
+
+### `procedure_signoff`
+Audit steps, compliance checks, quality gates. Leads with checklist and exceptions.
+
+<img src="./docs/assets/layout-procedure.png" alt="procedure_signoff layout" width="300"/>
+
+</td>
+</tr>
+<tr>
+<td width="33%">
+
+### `data_access`
+Sensitive data access, export approvals. Shows who, what, why, and risk level.
+
+<img src="./docs/assets/layout-data.png" alt="data_access layout" width="300"/>
+
+</td>
+<td width="33%">
+
+### `content_moderation`
+Generated-content review, publish approvals. Leads with the content and flags.
+
+<img src="./docs/assets/layout-content.png" alt="content_moderation layout" width="300"/>
+
+</td>
+<td width="33%">
+
+### `code_deployment`
+Automated deploys and infra changes. Leads with diff, tests, and blast radius.
+
+<img src="./docs/assets/layout-deployment.png" alt="code_deployment layout" width="300"/>
+
+</td>
+</tr>
+</table>
 
 Need something else? [Build a custom layout](./docs/custom-layouts.md) — layouts are just React components that consume a typed payload schema.
 
@@ -180,6 +223,7 @@ Deliberate is at **v1.0**. The core flow (SDK → server → notifications → a
 
 We welcome contributions. Start here:
 
+- [Join the Discord](https://discord.gg/yWzARrn8Z3) to ask questions or share what you're building
 - [Read CONTRIBUTING.md](./CONTRIBUTING.md) to set up a dev environment
 - [Report bugs](https://github.com/beomwookang/deliberate/issues)
 - [Vote on ideas](https://github.com/beomwookang/deliberate/discussions/categories/ideas) on GitHub Discussions
