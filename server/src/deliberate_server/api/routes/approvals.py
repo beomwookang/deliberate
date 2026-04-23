@@ -15,6 +15,8 @@ from deliberate_server.auth import compute_content_hash, sign_content_hash, sign
 from deliberate_server.db.models import Approval, Decision, Interrupt
 from deliberate_server.db.models import LedgerEntry as LedgerEntryModel
 from deliberate_server.db.session import async_session
+from deliberate_server.metrics import APPROVAL_DURATION, DECISIONS_TOTAL
+from deliberate_server.telemetry import emit_ledger_span
 
 logger = logging.getLogger("deliberate_server.api.approvals")
 
@@ -38,6 +40,7 @@ class PayloadResponse(BaseModel):
     status: str
     layout: str
     payload: dict[str, Any]
+    decision: dict[str, Any] | None = None
 
 
 DecisionType = Literal["approve", "modify", "escalate", "reject"]
@@ -112,11 +115,31 @@ async def get_approval_payload(approval_id: uuid.UUID) -> PayloadResponse:
         if interrupt is None:
             raise HTTPException(status_code=404, detail="Interrupt not found")
 
+        decision_data: dict[str, Any] | None = None
+        if approval.status == "decided":
+            decision_result = await session.execute(
+                select(Decision).where(Decision.approval_id == approval_id)
+            )
+            decision_row = decision_result.scalar_one_or_none()
+            if decision_row is not None:
+                decision_data = {
+                    "decision_type": decision_row.decision_type,
+                    "approver_email": decision_row.approver_email,
+                    "decided_at": decision_row.decided_at.isoformat()
+                    if decision_row.decided_at
+                    else "",
+                    "rationale_category": decision_row.rationale_category,
+                    "rationale_notes": decision_row.rationale_notes,
+                    "review_duration_ms": decision_row.review_duration_ms,
+                    "decision_payload": decision_row.decision_payload,
+                }
+
         return PayloadResponse(
             approval_id=str(approval_id),
             status=approval.status,
             layout=interrupt.layout,
             payload=interrupt.payload,
+            decision=decision_data,
         )
 
 
@@ -193,6 +216,14 @@ async def submit_decision(approval_id: uuid.UUID, body: DecideRequest) -> Decide
         else:
             group_role = "sole_decider"
 
+        # Get prev_hash from the most recent ledger entry for hash chaining (M3b)
+        prev_entry_result = await session.execute(
+            select(LedgerEntryModel.content_hash)
+            .order_by(LedgerEntryModel.created_at.desc())
+            .limit(1)
+        )
+        prev_hash_value = prev_entry_result.scalar_one_or_none()
+
         # Build ledger content per PRD §5.3
         ledger_content: dict[str, Any] = {
             "id": str(uuid.uuid4()),
@@ -224,6 +255,7 @@ async def submit_decision(approval_id: uuid.UUID, body: DecideRequest) -> Decide
                 "role": group_role,
             },
             "escalations": [],
+            "prev_hash": prev_hash_value,
             "resume": None,
         }
 
@@ -261,16 +293,21 @@ async def submit_decision(approval_id: uuid.UUID, body: DecideRequest) -> Decide
             resume_latency_ms=None,
             content=ledger_content,
             content_hash=content_hash,
+            prev_hash=prev_hash_value,
         )
         session.add(ledger_entry)
 
+    emit_ledger_span(ledger_content)
+    DECISIONS_TOTAL.labels(decision_type=body.decision_type).inc()
+    if body.review_duration_ms is not None:
+        APPROVAL_DURATION.observe(body.review_duration_ms / 1000.0)
     logger.info("Decision recorded for approval %s: %s", approval_id, body.decision_type)
     return DecideResponse(status="decided")
 
 
 @router.post("/{approval_id}/resume-ack", response_model=ResumeAckResponse)
 async def resume_ack(approval_id: uuid.UUID, body: ResumeAckRequest) -> ResumeAckResponse:
-    """Acknowledge graph resume. Updates ledger entry with final resume status."""
+    """Acknowledge graph resume. Writes to resume_events (M3b: ledger immutability)."""
     async with async_session() as session, session.begin():
         # Find the ledger entry for this approval
         result = await session.execute(
@@ -286,25 +323,18 @@ async def resume_ack(approval_id: uuid.UUID, body: ResumeAckRequest) -> ResumeAc
         if ledger_entry is None:
             raise HTTPException(status_code=404, detail="Ledger entry not found for approval")
 
-        # Update resume fields
+        # Write to resume_events instead of mutating ledger content (M3b)
+        from deliberate_server.db.models import ResumeEvent
+
+        resume_event = ResumeEvent(
+            ledger_entry_id=ledger_entry.id,
+            resume_status=body.resume_status,
+            resume_latency_ms=body.resume_latency_ms,
+        )
+        session.add(resume_event)
+
+        # Update only the operational columns (not the content JSONB)
         ledger_entry.resume_status = body.resume_status
         ledger_entry.resume_latency_ms = body.resume_latency_ms
-
-        # Update the content JSON as well
-        content = dict(ledger_entry.content)
-        content["resume"] = {
-            "resumed_at": datetime.now(UTC).isoformat(),
-            "resume_latency_ms": body.resume_latency_ms,
-            "resume_status": body.resume_status,
-        }
-        # Recompute hash after resume update
-        excluded = ("content_hash", "signature")
-        content_without_sig = {k: v for k, v in content.items() if k not in excluded}
-        new_hash = compute_content_hash(content_without_sig)
-        new_sig = sign_content_hash(new_hash)
-        content["content_hash"] = new_hash
-        content["signature"] = new_sig
-        ledger_entry.content = content
-        ledger_entry.content_hash = new_hash
 
     return ResumeAckResponse(ok=True)

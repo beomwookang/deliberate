@@ -8,6 +8,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from deliberate_server.api.routes.approval_groups import router as approval_groups_router
 from deliberate_server.api.routes.approvals import router as approvals_router
@@ -17,11 +19,15 @@ from deliberate_server.policy import init_policy_system
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
+_shutting_down = False
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     init_policy_system()
     yield
+    global _shutting_down
+    _shutting_down = True
 
 
 app = FastAPI(
@@ -47,7 +53,14 @@ app.include_router(ledger_router)
 
 @app.get("/health")
 async def health() -> dict[str, str]:
+    if _shutting_down:
+        return {"status": "shutting_down"}
     return {"status": "ok"}
+
+
+@app.get("/metrics")
+async def metrics() -> Response:
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 def run() -> None:

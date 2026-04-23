@@ -10,6 +10,7 @@ import pytest
 
 from deliberate_server.auth import (
     APPROVAL_TOKEN_AUDIENCE,
+    _jwt_key,
     compute_content_hash,
     create_approval_token,
     hash_api_key,
@@ -17,7 +18,6 @@ from deliberate_server.auth import (
     verify_api_key,
     verify_approval_token,
 )
-from deliberate_server.config import settings
 
 
 class TestJwtTokens:
@@ -32,7 +32,7 @@ class TestJwtTokens:
         token = create_approval_token(approval_id)
         payload = jwt.decode(
             token,
-            settings.secret_key,
+            _jwt_key,
             algorithms=["HS256"],
             audience=APPROVAL_TOKEN_AUDIENCE,
         )
@@ -54,7 +54,7 @@ class TestJwtTokens:
             "iat": now - timedelta(days=10),
             "exp": now - timedelta(days=1),
         }
-        token = jwt.encode(payload, settings.secret_key, algorithm="HS256")
+        token = jwt.encode(payload, _jwt_key, algorithm="HS256")
         with pytest.raises(jwt.ExpiredSignatureError):
             verify_approval_token(token)
 
@@ -71,7 +71,7 @@ class TestJwtTokens:
             "iat": 1700000000,
             "exp": 9999999999,
         }
-        token = jwt.encode(payload, settings.secret_key, algorithm="HS256")
+        token = jwt.encode(payload, _jwt_key, algorithm="HS256")
         with pytest.raises(jwt.InvalidAudienceError):
             verify_approval_token(token)
 

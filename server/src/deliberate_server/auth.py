@@ -2,6 +2,7 @@
 
 JWT approval tokens (HS256): implemented now for M2 readiness.
 API key authentication: used in M1 for SDK-to-server auth.
+HKDF key derivation (M3a): separate keys for JWT, HMAC, and content hashing.
 """
 
 from __future__ import annotations
@@ -14,11 +15,30 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from deliberate_server.config import settings
 
 APPROVAL_TOKEN_AUDIENCE = "deliberate-approval"
 APPROVAL_TOKEN_EXPIRY_DAYS = 7
+
+
+def _derive_key(master_key: str, info: bytes, length: int = 32) -> bytes:
+    """Derive a purpose-specific key from the master SECRET_KEY using HKDF."""
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=length,
+        salt=None,  # No salt — master key is high-entropy
+        info=info,
+    )
+    return hkdf.derive(master_key.encode())
+
+
+# Derived keys — computed once at import time
+_jwt_key = _derive_key(settings.secret_key, b"deliberate-jwt-signing")
+_hmac_key = _derive_key(settings.secret_key, b"deliberate-hmac-signing")
+_content_key = _derive_key(settings.secret_key, b"deliberate-content-hash")
 
 
 def create_approval_token(approval_id: uuid.UUID) -> str:
@@ -34,7 +54,7 @@ def create_approval_token(approval_id: uuid.UUID) -> str:
         "iat": now,
         "exp": now + timedelta(days=APPROVAL_TOKEN_EXPIRY_DAYS),
     }
-    return jwt.encode(payload, settings.secret_key, algorithm="HS256")
+    return jwt.encode(payload, _jwt_key, algorithm="HS256")
 
 
 def verify_approval_token(token: str) -> uuid.UUID:
@@ -48,7 +68,7 @@ def verify_approval_token(token: str) -> uuid.UUID:
     """
     payload = jwt.decode(
         token,
-        settings.secret_key,
+        _jwt_key,
         algorithms=["HS256"],
         audience=APPROVAL_TOKEN_AUDIENCE,
     )
@@ -76,9 +96,9 @@ def compute_content_hash(content: dict[str, Any]) -> str:
 
 
 def sign_content_hash(content_hash: str) -> str:
-    """HMAC-sign a content hash with the server's secret key."""
+    """HMAC-sign a content hash with the derived HMAC key."""
     return hmac.new(
-        settings.secret_key.encode(),
+        _hmac_key,
         content_hash.encode(),
         hashlib.sha256,
     ).hexdigest()
@@ -88,7 +108,7 @@ def sign_decision(fields: dict[str, Any]) -> str:
     """Create an HMAC signature over decision fields."""
     canonical = json.dumps(fields, sort_keys=True, separators=(",", ":"), default=str)
     return hmac.new(
-        settings.secret_key.encode(),
+        _hmac_key,
         canonical.encode(),
         hashlib.sha256,
     ).hexdigest()

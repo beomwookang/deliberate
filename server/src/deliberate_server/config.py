@@ -53,6 +53,7 @@ class Settings(BaseSettings):
 
     # Worker
     worker_poll_interval_seconds: int = 15
+    max_escalation_depth: int = 3
 
     model_config = {"env_prefix": "", "case_sensitive": False}
 

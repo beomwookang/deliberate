@@ -26,9 +26,11 @@ from deliberate_server.config import settings
 from deliberate_server.db.models import Application, Approval, Interrupt
 from deliberate_server.db.models import LedgerEntry as LedgerEntryModel
 from deliberate_server.db.session import async_session
+from deliberate_server.metrics import INTERRUPTS_TOTAL
 from deliberate_server.notify import notification_dispatcher
 from deliberate_server.policy import NoMatchingPolicyError, policy_engine
 from deliberate_server.policy.types import ResolvedPlan
+from deliberate_server.telemetry import emit_ledger_span
 
 logger = logging.getLogger("deliberate_server.api.interrupts")
 
@@ -177,6 +179,14 @@ async def _handle_auto_approve(
         session.add(interrupt_row)
         await session.flush()
 
+        # Get prev_hash for hash chaining (M3b)
+        prev_entry_result = await session.execute(
+            select(LedgerEntryModel.content_hash)
+            .order_by(LedgerEntryModel.created_at.desc())
+            .limit(1)
+        )
+        prev_hash_value = prev_entry_result.scalar_one_or_none()
+
         # Build auto-approve ledger content
         ledger_content: dict[str, Any] = {
             "id": str(ledger_id),
@@ -204,6 +214,7 @@ async def _handle_auto_approve(
                 "review_duration_ms": 0,
             },
             "escalations": [],
+            "prev_hash": prev_hash_value,
             "resume": None,
         }
 
@@ -221,9 +232,12 @@ async def _handle_auto_approve(
             resume_latency_ms=0,
             content=ledger_content,
             content_hash=content_hash,
+            prev_hash=prev_hash_value,
         )
         session.add(ledger_entry)
 
+    emit_ledger_span(ledger_content)
+    INTERRUPTS_TOTAL.labels(layout=validated_payload.layout, action="auto_approve").inc()
     logger.info(
         "Auto-approved interrupt %s (policy=%s, rule=%s, rationale=%s)",
         interrupt_id,
@@ -353,6 +367,7 @@ async def _handle_request_human(
     except Exception:
         logger.exception("Notification dispatch failed for group %s", group_id)
 
+    INTERRUPTS_TOTAL.labels(layout=validated_payload.layout, action="request_human").inc()
     return InterruptResponse(
         approval_group_id=str(group_id),
         approval_ids=[str(a) for a in approval_ids],
