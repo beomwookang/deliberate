@@ -89,7 +89,7 @@ Need something else? [Build a custom layout](./docs/custom-layouts.md) — layou
 
 ---
 
-## Agent-Friendly (M5)
+## Agent-Friendly
 
 Deliberate is designed to be managed by AI coding assistants, not just humans editing YAML files.
 
@@ -201,10 +201,3 @@ Good first issues are tagged [`good-first-issue`](https://github.com/beomwookang
 
 MIT. See [LICENSE](./LICENSE).
 
----
-
-<div align="center">
-
-Built by [Beomwoo Kang](https://github.com/beomwookang).
-
-</div>
