@@ -65,7 +65,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://deliberate:deliberate@postgres:5432/deliberate
       SECRET_KEY: ${SECRET_KEY}
-      DEFAULT_APPROVER_EMAIL: ${DEFAULT_APPROVER_EMAIL:-approver@example.com}
+      DEFAULT_APPROVER_EMAIL: ${DEFAULT_APPROVER_EMAIL:-}
     command: ["python", "-m", "deliberate_server.worker"]
 
   ui:

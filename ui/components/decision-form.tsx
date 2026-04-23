@@ -50,6 +50,7 @@ export function DecisionForm({
   const [notes, setNotes] = useState("");
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [approverEmail, setApproverEmail] = useState<string | null>(null);
 
   // Reset load time on mount
   useEffect(() => {
@@ -73,7 +74,7 @@ export function DecisionForm({
           decision_payload: null,
           rationale_category: selectedCategory,
           rationale_notes: notes || null,
-          approver_email: "anonymous@deliberate.dev",
+          approver_email: approverEmail || "anonymous@deliberate.dev",
           review_duration_ms: reviewDurationMs,
           decided_via: "web_ui",
         }),

@@ -11,14 +11,14 @@ This guide will get you up and running in 15 minutes.
 - **Node.js 18+** and `pnpm` — for building the UI (optional; Docker Compose handles this)
 - **Slack Bot Token** (optional) — for Slack notifications
 
-If you don't have these installed, see the [full installation guide](./INSTALLATION.md).
+Install Docker, Python (via `pyenv` or your system package manager), and Node.js before continuing.
 
 ## Quick Start (15 minutes)
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-handle/deliberate.git
+git clone https://github.com/beomwookang/deliberate.git
 cd deliberate
 ```
 
@@ -47,7 +47,7 @@ UI_URL=http://localhost:3000
 NEXT_PUBLIC_API_URL=http://localhost:4000
 INTERNAL_API_URL=http://server:4000
 DELIBERATE_SERVER_URL=http://localhost:4000
-DELIBERATE_API_KEY=SmZ-5ETlbm4v-sGgwSd33SE2VMbBbxxdQt0dvR2U8hs
+DELIBERATE_API_KEY=your-api-key-here
 DELIBERATE_UI_URL=http://localhost:3000
 ```
 
@@ -106,14 +106,14 @@ Open a new terminal and run:
 ```bash
 cd examples/refund_agent
 uv pip install -e ".[dev]"
-uv run python dogfood.py
+uv run python agent.py
 ```
 
 You'll see output like:
 
 ```
 ==================================================
-Dogfooding — CS 응답 검토 에이전트
+Deliberate — CS 응답 검토 에이전트
 ==================================================
 
 고객: 김민지
@@ -322,7 +322,7 @@ Maps approver IDs (used in policies) to real people and groups.
 ```yaml
 approvers:
   - id: finance_lead
-    email: priya@acme.com
+    email: priya@example.com
     display_name: "Priya Sharma"
     out_of_office:
       active: false
@@ -331,7 +331,7 @@ approvers:
       delegate_to: null
 
   - id: cfo
-    email: cfo@acme.com
+    email: cfo@example.com
     display_name: "Alex Chen"
 
 groups:
@@ -344,7 +344,7 @@ groups:
 - **`id`** — Unique identifier (used in policies)
 - **`email`** — Email address (used for notifications and UI)
 - **`display_name`** — Human-friendly name
-- **`out_of_office`** — Schema-reserved (not yet used in M2a; placeholder for v1.1)
+- **`out_of_office`** — Out-of-office delegation (schema present; enforcement planned for v1.1)
 
 #### Group fields
 
@@ -509,7 +509,7 @@ Request body:
   "decision_payload": null,
   "rationale_category": "damage",
   "rationale_notes": "Confirmed shipping damage. Refund approved.",
-  "approver_email": "priya@acme.com",
+  "approver_email": "priya@example.com",
   "review_duration_ms": 125,
   "decided_via": "web_ui"
 }
@@ -567,12 +567,12 @@ For `all_of` approvals, returns aggregated status:
   "approvals": [
     {
       "approval_id": "550e8400-e29b-41d4-a716-446655440001",
-      "approver_email": "priya@acme.com",
+      "approver_email": "priya@example.com",
       "status": "pending"
     },
     {
       "approval_id": "550e8400-e29b-41d4-a716-446655440002",
-      "approver_email": "cfo@acme.com",
+      "approver_email": "cfo@example.com",
       "status": "decided",
       "decision_type": "approve"
     }
@@ -583,10 +583,10 @@ For `all_of` approvals, returns aggregated status:
 ### Query Ledger
 
 ```
-GET /ledger?thread_id=<thread_id>
+GET /ledger?thread_id=<thread_id>&approver_id=<email>&date_from=<iso>&date_to=<iso>&q=<search>&cursor=<cursor>
 ```
 
-Returns all ledger entries for a thread (audit trail):
+Returns ledger entries for a thread (audit trail) with cursor-based pagination:
 
 ```json
 {
@@ -605,14 +605,33 @@ Returns all ledger entries for a thread (audit trail):
       "payload": {
         "approval_id": "550e8400-e29b-41d4-a716-446655440001",
         "decision_type": "approve",
-        "approver_email": "priya@acme.com",
+        "approver_email": "priya@example.com",
         "rationale_category": "damage"
       },
       "created_at": "2024-04-22T10:17:15Z"
     }
-  ]
+  ],
+  "next_cursor": "eyJ0cyI6IjIwMjQtMDQtMjJUMTA6MTc6MTVaIiwiaWQiOiI1NTBlODQwMC4uLiJ9"
 }
 ```
+
+Pass `next_cursor` as the `cursor` query parameter to fetch the next page. When `next_cursor` is `null`, all entries have been returned.
+
+You can also export ledger entries as JSON or CSV:
+
+```
+GET /ledger/export/json?thread_id=<thread_id>
+GET /ledger/export/csv?thread_id=<thread_id>
+```
+
+### Authentication Endpoints
+
+These endpoints support the magic-link approver identity flow. They do not require the `X-Deliberate-API-Key` header.
+
+- `POST /auth/magic-link` — Request a magic link for an approver email (returns token in response body in development mode; sends email in production).
+- `POST /auth/verify-magic-link` — Exchange a magic link token for a session token.
+- `POST /auth/verify-session` — Validate an existing session token and return approver identity.
+- `POST /auth/verify-approval-token` — Validate a signed approval JWT (used by the approval page to confirm the token is valid and not expired).
 
 ## SDK Usage
 
@@ -704,8 +723,8 @@ def your_node(state):
 ```
 
 - **`layout`** (required) — Layout type for the UI
-- **`notify`** — Notification channels. Not used in M2a (planned for M2b)
-- **`policy`** — Policy file path. Not used in M2a (server evaluates policies)
+- **`notify`** — Notification channels. Passed through to the server; the server evaluates which channels to use based on the matched policy rule.
+- **`policy`** — Policy file path. The server evaluates policies server-side; this parameter is reserved for future client-side filtering.
 - **`timeout_seconds`** — Polling timeout (default: 3600 seconds / 1 hour)
 - **`server_url`**, **`api_key`**, **`ui_url`** — Override env vars
 
@@ -905,7 +924,7 @@ def compliance_signoff(state):
 **Cause**: Approval ID is wrong, or the approval was created in a different environment.
 
 **Solution**:
-1. Check the approval URL format: `http://localhost:3000/a/{approval_id}` (UUIDs only in M2a)
+1. Check the approval URL format: `http://localhost:3000/a/{token}` (Approval URLs support both UUIDs and signed JWT tokens)
 2. Verify the approval exists: query the database
    ```sql
    SELECT id, status FROM approvals WHERE id = '550e8400-e29b-41d4-a716-446655440000';
@@ -919,7 +938,7 @@ def compliance_signoff(state):
 **Cause**: Agent is not polling, or polling timed out.
 
 **Solution**:
-1. Check agent logs for errors: `uv run python dogfood.py 2>&1 | grep -i error`
+1. Check agent logs for errors: `uv run python agent.py 2>&1 | grep -i error`
 2. Verify `DELIBERATE_SERVER_URL` and `DELIBERATE_API_KEY` are set in the agent's environment
 3. Check server logs: `docker compose logs server | grep ERROR`
 4. If polling timeout is too short, increase `timeout_seconds` in the decorator:
@@ -942,19 +961,16 @@ def compliance_signoff(state):
 
 ## Next Steps
 
-- **Read the PRD** — [Product Requirements Document](./PRD.md) for full architecture and design decisions
-- **Explore layouts** — [Layouts guide](./LAYOUTS.md) to understand each built-in layout
-- **Build a policy** — [Policy guide](./POLICIES.md) for writing complex routing rules
-- **Set up notifications** — [Notifications guide](./NOTIFICATIONS.md) for Slack, Email, Webhook
-- **Audit your approvals** — [Ledger guide](./LEDGER.md) for querying and exporting audit trails
-- **Deploy to production** — [Deployment guide](./DEPLOYMENT.md) for Docker, Kubernetes, managed platforms
+- **Build a custom layout** — [Custom Layouts guide](./custom-layouts.md) to create approval UIs for your own workflow types
+- **Review security** — [Security guide](./security.md) for threat model, key management, and production hardening
+- **Explore the CONTRIBUTING guide** — [CONTRIBUTING.md](../CONTRIBUTING.md) for dev setup, code style, and PR process
 
 ## Support
 
 - **Discord** — [Join the community](https://discord.gg/deliberate)
-- **GitHub Issues** — [Report a bug](https://github.com/your-handle/deliberate/issues)
-- **Email** — `beomwookang@gmail.com`
+- **GitHub Issues** — [Report a bug](https://github.com/beomwookang/deliberate/issues)
+- **Email** — `hello@deliberate.dev`
 
 ---
 
-*Built with love by [Beomwoo Kang](https://github.com/your-handle).*
+*Built with love by [Beomwoo Kang](https://github.com/beomwookang).*

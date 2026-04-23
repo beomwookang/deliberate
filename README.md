@@ -139,7 +139,7 @@ That layer is Deliberate. Use LangGraph's `interrupt()` anywhere — Deliberate 
 
 ## Project status
 
-Deliberate is at **v1.0**. The core flow (SDK → server → notifications → approval UI → resume → ledger) works end-to-end. Self-hosting is supported. Managed cloud is not yet available.
+Deliberate is at **v0.1.0** (pre-release). The core flow (SDK → server → notifications → approval UI → resume → ledger) works end-to-end. Self-hosting is supported. Managed cloud is not yet available.
 
 ### Documentation
 

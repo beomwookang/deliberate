@@ -93,11 +93,6 @@ cd ui && pnpm lint && pnpm typecheck
 - Server mypy --strict not fully passing due to mixed imports; address in M2.
 - `deliberate-core` package extraction if SDK↔server coupling causes issues.
 
-#### Known TODOs in code
-- `sdk/src/deliberate/client.py:75` — `TODO(M2): Replace with signed token per PRD §6.6`
-- `server/src/deliberate_server/api/routes/approvals.py:100` — `TODO(M2): Replace with signed token per PRD §6.6`
-- `ui/app/a/[approval_id]/page.tsx:15` — `TODO(M2): Replace with signed token per PRD §6.6`
-
 ### Session 3 — 2026-04-22 — Milestone M2a (Policy engine + Notifications)
 
 #### What's implemented

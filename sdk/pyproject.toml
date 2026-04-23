@@ -9,7 +9,7 @@ description = "The approval layer for LangGraph agents"
 license = "MIT"
 requires-python = ">=3.11"
 authors = [
-    { name = "Beomwoo Kang", email = "beomwookang@gmail.com" },
+    { name = "Beomwoo Kang", email = "hello@deliberate.dev" },
 ]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",

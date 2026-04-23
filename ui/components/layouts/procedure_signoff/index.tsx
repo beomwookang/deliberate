@@ -2,7 +2,7 @@
  * Procedure signoff layout — for audit procedures, compliance checks, quality gates.
  * See PRD §4.2 for the layout specification.
  *
- * Placeholder — real implementation ships in M2.
+ * Renders checklist steps, exceptions, standards reference, and evidence table.
  */
 
 export interface ProcedureSignoffPayload {

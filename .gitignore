@@ -49,3 +49,7 @@ playwright-report/
 
 # Docker
 pgdata/
+
+# Development artifacts (internal documents, local assets)
+docs/launch-plan.md
+deliberate_banner.png

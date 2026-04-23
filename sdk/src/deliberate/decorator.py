@@ -14,7 +14,7 @@ See PRD §6.2 and README Quickstart for usage:
 
 The decorated function returns a dict (the interrupt payload fields).
 The decorator handles: submit to server, poll for decision, return decision.
-For M1, polling blocks the graph execution thread — this is intentional.
+Polling blocks the graph execution thread synchronously — this is intentional.
 """
 
 from __future__ import annotations
@@ -69,12 +69,12 @@ def approval_gate(
     wraps this in an InterruptPayload, submits to the Deliberate server, polls
     for a decision, and returns the decision as a state update.
 
-    For M1, polling blocks the graph execution thread synchronously.
+    Polling blocks the graph execution thread synchronously.
 
     Args:
         layout: Layout identifier (e.g. 'financial_decision').
-        notify: Notification channels. Not used in M1.
-        policy: YAML policy file path. Not used in M1.
+        notify: Notification channels. Reserved for future use.
+        policy: YAML policy file path. Reserved for future use.
         timeout_seconds: Client-side polling timeout. Default 1 hour.
         server_url: Override for DELIBERATE_SERVER_URL env var.
         api_key: Override for DELIBERATE_API_KEY env var.
@@ -130,7 +130,7 @@ def approval_gate(
                 )
 
             # Submit to server, poll for decision, return result.
-            # For M1, this blocks the graph thread synchronously.
+            # Blocks the graph thread synchronously.
             client = DeliberateClient(
                 base_url=server_url,
                 api_key=api_key,
@@ -161,8 +161,7 @@ def approval_gate(
                 use_group = interrupt_result.approval_mode == "all_of"
 
                 url = client.approval_url(approval_id)
-                logger.info("[APPROVAL_URL] %s", url)
-                print(f"\n[DELIBERATE] Approval needed: {url}\n")
+                logger.info("[DELIBERATE] Approval needed: %s", url)
 
                 decision_start = time.monotonic()
 

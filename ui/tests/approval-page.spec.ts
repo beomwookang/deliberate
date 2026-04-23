@@ -13,7 +13,7 @@
 import { expect, test } from "@playwright/test";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-const API_KEY = process.env.DELIBERATE_API_KEY || "SmZ-5ETlbm4v-sGgwSd33SE2VMbBbxxdQt0dvR2U8hs";
+const API_KEY = process.env.DELIBERATE_API_KEY || "test-api-key";
 
 async function createApproval(): Promise<string> {
   const res = await fetch(`${API_URL}/interrupts`, {

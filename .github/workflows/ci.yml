@@ -29,6 +29,23 @@ jobs:
     defaults:
       run:
         working-directory: server
+    env:
+      DATABASE_URL: postgresql+asyncpg://deliberate:deliberate@localhost:5432/deliberate
+      SECRET_KEY: ci-test-secret-key-for-github-actions
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: deliberate
+          POSTGRES_PASSWORD: deliberate
+          POSTGRES_DB: deliberate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
@@ -42,7 +59,7 @@ jobs:
       - run: pytest
 
   ui-check:
-    name: UI — lint, typecheck, playwright install
+    name: UI — lint, typecheck
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -58,4 +75,3 @@ jobs:
       - run: pnpm install
       - run: pnpm lint
       - run: pnpm typecheck
-      - run: npx playwright install --with-deps

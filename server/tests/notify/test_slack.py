@@ -74,7 +74,7 @@ class TestSlackNotifier:
 
         notifier._client = mock_client
         with patch("deliberate_server.notify.slack.settings") as mock_settings:
-            mock_settings.slack_bot_token = "xoxb-test-token"
+            mock_settings.slack_bot_token = "test-slack-bot-token"
             result = await notifier.send(_make_ctx())
 
         assert result.success is True
@@ -110,7 +110,7 @@ class TestSlackNotifier:
 
         notifier._client = mock_client
         with patch("deliberate_server.notify.slack.settings") as mock_settings:
-            mock_settings.slack_bot_token = "xoxb-test-token"
+            mock_settings.slack_bot_token = "test-slack-bot-token"
             result = await notifier.send(_make_ctx())
 
         assert result.success is False
@@ -139,7 +139,7 @@ class TestSlackNotifier:
 
         notifier._client = mock_client
         with patch("deliberate_server.notify.slack.settings") as mock_settings:
-            mock_settings.slack_bot_token = "xoxb-test-token"
+            mock_settings.slack_bot_token = "test-slack-bot-token"
             # First call
             await notifier.send(_make_ctx())
             # Second call — should use cache

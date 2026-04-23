@@ -2,10 +2,13 @@
 
 Layouts are the approval UI components that render interrupt payloads for human reviewers. Each layout is a React Server Component that receives the interrupt payload and renders a specialized decision interface.
 
-Deliberate ships three built-in layouts:
+Deliberate ships six built-in layouts:
 - `financial_decision` — for monetary approval requests (refunds, purchases, transfers)
 - `document_review` — for contract and document review workflows
 - `procedure_signoff` — for checklist-based procedure approvals
+- `data_access` — for data access requests (resource, scope, risk level)
+- `content_moderation` — for flagged content review (flagged items, policy references)
+- `code_deployment` — for deployment approvals (diff, test results, rollback plan)
 
 This guide walks through creating a custom layout for your own approval type.
 
@@ -89,7 +92,7 @@ interface TicketApprovalPayload {
 Create `ui/components/layouts/ticket_approval/index.tsx`:
 
 ```typescript
-import { DecisionForm } from "@/components/decision_form";
+import { DecisionForm } from "@/components/decision-form";
 
 interface TicketApprovalPayload {
   subject: string;
@@ -181,7 +184,7 @@ export function TicketApprovalLayout({
       {/* Decision form */}
       <DecisionForm
         approvalId={approvalId}
-        decisionOptions={decisionOptions ?? ["approve", "reject"]}
+        decisionOptions={decisionOptions ?? [{ type: "approve", label: "Approve" }, { type: "reject", label: "Reject" }]}
         rationaleCategories={rationaleCategories ?? ["policy_compliant", "too_risky"]}
       />
     </div>
@@ -231,20 +234,19 @@ Each layout has its own semantically appropriate decision options and rationale 
 In `server/config/policies.yaml`, create a rule that routes to your layout:
 
 ```yaml
-- name: deployment-approvals
-  rules:
-    - name: all-deployments
-      when: "layout == 'ticket_approval'"
-      action: request_human
-      approvers:
-        - group: platform-leads
-      approval_mode: any_of
-      timeout_seconds: 3600
-      on_timeout: escalate
-      escalate_to: platform-leads-escalation
-      notify:
-        - email
-        - slack
+name: deployment_approval
+matches:
+  layout: ticket_approval
+
+rules:
+  - name: all-deployments
+    when: "true"
+    approvers:
+      any_of: [platform_leads]
+    timeout: 1h
+    on_timeout: escalate
+    escalate_to: platform_leads_escalation
+    notify: [email, slack]
 ```
 
 ---

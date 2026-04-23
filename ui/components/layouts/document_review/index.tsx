@@ -2,7 +2,7 @@
  * Document review layout — for contracts, policies, legal redlines.
  * See PRD §4.2 for the layout specification.
  *
- * Placeholder — real implementation ships in M2.
+ * Renders document URL, flagged clauses, agent reasoning, and evidence table.
  */
 
 export interface DocumentReviewPayload {

@@ -1,6 +1,6 @@
 # Deliberate Security Review and Threat Model
 
-This document covers the security posture of the Deliberate server as of v0.1.0 (M2b). It is intended for operators deploying Deliberate in production and for security reviewers auditing the codebase.
+This document covers the security posture of the Deliberate server as of v1.0. It is intended for operators deploying Deliberate in production and for security reviewers auditing the codebase.
 
 ---
 
@@ -18,7 +18,7 @@ In v1.0 approvers authenticate via a magic link delivered to their email address
 
 **Approval URL integrity**
 
-Approval page URLs currently use raw UUIDs (`/a/{approval_id}`). UUID entropy (128 bits) prevents enumeration. M3 will replace these with signed JWT tokens per PRD §6.6.
+Approval page URLs use signed JWT tokens (`/a/{jwt}`) generated with a key derived from `SECRET_KEY` via HKDF. Tokens are bound to the approver email, carry a configurable expiry, and are verified on the approval page. Raw UUIDs are also accepted for backward compatibility.
 
 ---
 
@@ -58,7 +58,7 @@ Every significant action (interrupt received, auto-approved, decision submitted,
 
 **CORS policy**
 
-In development mode the server sets `Access-Control-Allow-Origin: *`. In production, operators must set the `CORS_ORIGINS` environment variable to an explicit allowlist (e.g., `https://approvals.example.com`). The FastAPI CORS middleware enforces this.
+The server is configured to allow all origins by default (`Access-Control-Allow-Origin: *`). In production, configure CORS restrictions at the reverse proxy level (nginx, Caddy, AWS API Gateway) to limit allowed origins to your approval UI domain.
 
 **Payload exposure**
 
@@ -178,11 +178,11 @@ JWT claims:
   jti: random UUID (not yet tracked for replay prevention)
 ```
 
-The magic link email is sent when an interrupt is created (if `notify: [email]` is configured in the policy). The JWT is validated on the approval page. JWT replay prevention (jti tracking) is deferred to M3.
+The magic link email is sent when an interrupt is created (if `notify: [email]` is configured in the policy). The JWT is validated on the approval page via `POST /auth/verify-approval-token`. JWT replay prevention (jti tracking) is planned for v1.1.
 
 ### Approval URLs
 
-In v1.0, approval URLs use raw UUIDs with 128-bit entropy. M3 will replace these with signed JWT tokens that include expiry, approver binding, and jti replay prevention per PRD §6.6.
+Approval URLs use signed JWT tokens (`/a/{jwt}`) with approver binding and expiry. Raw UUIDs are also accepted for backward compatibility. The token is verified by the approval page before rendering. jti replay prevention is planned for v1.1.
 
 ### No Role-Based Access Control
 
@@ -231,18 +231,18 @@ Before writing a ledger entry, the server validates the constructed `ledger_cont
 
 ## 5. Known Limitations
 
-| Limitation | Severity | Mitigation / Target |
+| Limitation | Severity | Status |
 |---|---|---|
-| Single-tenant only | Medium | Multi-tenancy planned for M4+ |
+| Single-tenant only | Medium | Planned for v1.1 |
 | No rate limiting | High | Deploy reverse proxy with rate limiting |
-| Magic link JWTs not tracked for replay | Medium | jti tracking planned for M3 |
-| Approval URLs use raw UUIDs (no expiry) | Medium | Signed JWT tokens planned for M3 |
-| No RBAC on decision endpoint | Medium | Approver binding planned for M3 |
+| Magic link JWTs not tracked for replay | Medium | Planned for v1.1 |
+| Approval URLs use raw UUIDs (no expiry) | Medium | Implemented — signed JWT tokens in v1.0 |
+| No RBAC on decision endpoint | Medium | Planned for v1.1 |
 | No IP allowlisting | Low | Configurable at reverse proxy level |
-| CORS allows all origins by default | Medium | Set `CORS_ORIGINS` env var in production |
-| API key rotation requires DB access | Low | Rotation endpoint planned for M3 |
-| No jti replay prevention on magic links | Medium | Planned for M3 |
-| Escalation loop guard absent | Low | Max-depth check planned for M3 |
+| CORS allows all origins by default | Medium | Configure at reverse proxy in production |
+| API key rotation requires DB access | Low | Planned for v1.1 |
+| No jti replay prevention on magic links | Medium | Planned for v1.1 |
+| Escalation loop guard absent | Low | Implemented — max-depth check in v1.0 |
 | Secret rotation invalidates pending approvals | Medium | Accepted trade-off for v1.0 |
 
 ---
@@ -284,10 +284,12 @@ server {
 
 ### CORS Configuration
 
-Set explicit CORS origins rather than allowing all:
+The server allows all origins by default. In production, restrict allowed origins at the reverse proxy level rather than in the application. For example, with nginx:
 
-```bash
-CORS_ORIGINS=https://approvals.example.com,https://admin.example.com
+```nginx
+add_header Access-Control-Allow-Origin "https://approvals.example.com";
+add_header Access-Control-Allow-Methods "GET, POST, OPTIONS";
+add_header Access-Control-Allow-Headers "X-Deliberate-API-Key, Content-Type";
 ```
 
 ### Database Security

@@ -13,6 +13,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from deliberate_server.api.routes.approval_groups import router as approval_groups_router
 from deliberate_server.api.routes.approvals import router as approvals_router
+from deliberate_server.api.routes.auth import router as auth_router
 from deliberate_server.api.routes.interrupts import router as interrupts_router
 from deliberate_server.api.routes.ledger import router as ledger_router
 from deliberate_server.policy import init_policy_system
@@ -45,6 +46,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(interrupts_router)
 app.include_router(approvals_router)
 app.include_router(approval_groups_router)

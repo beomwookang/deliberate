@@ -1,0 +1,3 @@
+# Webhook notification destinations
+# See docs/quickstart.md for configuration details
+webhooks: []

@@ -9,7 +9,7 @@ description = "Deliberate server — API gateway, policy engine, and timeout wor
 license = "MIT"
 requires-python = ">=3.11"
 authors = [
-    { name = "Beomwoo Kang", email = "beomwookang@gmail.com" },
+    { name = "Beomwoo Kang", email = "hello@deliberate.dev" },
 ]
 dependencies = [
     "fastapi>=0.115,<1",
