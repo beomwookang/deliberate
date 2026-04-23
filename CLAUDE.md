@@ -203,3 +203,40 @@ cd ui && pnpm lint && pnpm typecheck
 - Server: 219 tests
 - SDK: 30 tests
 - Total: 249 tests, all passing. mypy --strict clean. ruff clean. TypeScript clean. ESLint clean.
+
+### Session 6 — 2026-04-23 — Milestone M5 complete (Agent-Friendly Architecture)
+
+#### What's implemented
+- **Scope-based RBAC:** `api_keys` table with 11 resource-scoped permissions and 4 predefined roles (agent, admin, readonly, operator). `authenticate_api_key()` helper validates key+scope in caller's session (avoids NullPool double-connection). Key format: `dlb_ak_` + 32 bytes URL-safe base64.
+- **Policy CRUD API (7 endpoints):** POST/GET/PUT/DELETE /policies, /policies/{name}/test (dry-run expression evaluation), /policies/{name}/versions. Policy versioning with 50-version cap. Content hash (SHA-256 of canonical JSON).
+- **Approver & Group CRUD API (9 endpoints):** POST/GET/PUT/DELETE for /approvers and /groups. Group member validation against active approvers. Soft deletes.
+- **API Key Management (3 endpoints):** POST/GET/DELETE /api-keys. Keys created with explicit scopes or predefined role. Raw key returned once on creation.
+- **DB as source of truth:** PolicyEngine.load_from_db() and ApproverDirectory.load_from_db() replace YAML file loading. CRUD mutations trigger immediate reload. File-watching threads removed.
+- **YAML Seeding:** seed_from_yaml_if_empty() imports policies and approvers from YAML on first startup (when DB is empty). SEED_FROM_YAML=true by default.
+- **Admin Bootstrap:** ADMIN_BOOTSTRAP_KEY env var creates initial admin API key on startup.
+- **MCP Server:** standalone `deliberate-mcp` Python package (17 FastMCP tools wrapping REST API via httpx). Install: `uvx deliberate-mcp`.
+- **Scope checks on existing routes:** POST /interrupts requires interrupts:write. GET /approvals requires approvals:read. GET /ledger requires ledger:read. Export requires ledger:export.
+- **New endpoint:** GET /approvals?status=pending for listing approvals with status filter.
+- **Docs:** llms.txt (project root), docs/admin-api.md, docs/mcp.md, docs/rbac.md, docs/migration-guide.md. Updated README, quickstart, security docs.
+- **Migration 0006:** api_keys, policies, policy_versions, approver_groups tables. Existing api_key_hash migrated with agent scopes.
+
+#### Key decisions made during M5
+- **authenticate_api_key() is a plain function, not a FastAPI Depends:** Existing routes use `async with async_session()` directly (not Depends-injected sessions). With NullPool (tests), a separate Depends-based session conflicts. So auth shares the caller's session via a plain async helper.
+- **DB source of truth, YAML for seeding only:** YAML files seed an empty DB on first startup. After that, all management is via API. No hybrid merge logic.
+- **MCP is a thin REST wrapper:** Zero business logic in the MCP package. All 17 tools call httpx → REST API. Scope enforcement happens server-side.
+- **No auth on POST /approvals/{id}/decide:** Approvers use magic link JWT tokens, not API keys. Intentional — the decision endpoint is for the UI flow.
+- **Policy version retention = 50:** Oldest versions auto-deleted on overflow. Prevents unbounded growth.
+- **Cache invalidation = immediate reload:** CRUD endpoints call `load_from_db(session)` directly after mutations. No background polling.
+
+#### M5 decisions deferred
+- LangGraph native `interrupt()` / `Command(resume=...)` integration (future milestone)
+- Multi-tenancy expansion (application_id partitioning)
+- OAuth / SSO for API access
+- MCP tool descriptions could be richer (examples, when-to-use context)
+- Scope check on POST /approvals/{id}/decide (if API-driven decisions are needed)
+
+#### Test counts
+- Server: 255 tests (was 219)
+- SDK: 30 tests
+- MCP: 2 tests
+- Total: 287 tests, all passing. mypy 0 errors. ruff clean.
