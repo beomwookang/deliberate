@@ -37,9 +37,11 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
     """
     engine = create_async_engine(_TEST_DB_URL, poolclass=NullPool)
 
-    # Drop and recreate tables to pick up schema changes (new columns)
+    # Drop and recreate tables to pick up schema changes (new columns).
+    # Use CASCADE to handle any stale FK dependencies not tracked in models.
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        await conn.execute(text("DROP SCHEMA public CASCADE"))
+        await conn.execute(text("CREATE SCHEMA public"))
         await conn.run_sync(Base.metadata.create_all)
 
     async with engine.begin() as conn:

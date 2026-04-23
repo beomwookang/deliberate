@@ -127,7 +127,7 @@ async def test_c1_decision_type_round_trip(
 
     # Verify ledger
     resp = await client.get("/ledger", params={"thread_id": "thread-001"})
-    entries = resp.json()
+    entries = resp.json()["entries"]
     assert len(entries) >= 1
     content = entries[0]["content"]
     assert content["approval"]["decision_type"] == decision_type
@@ -158,7 +158,7 @@ async def test_c2_content_hash_verifiable(client: AsyncClient, i: int) -> None:
     await client.post(f"/approvals/{approval_id}/decide", json=decide_body)
 
     resp = await client.get("/ledger", params={"thread_id": thread_id})
-    entry = resp.json()[0]
+    entry = resp.json()["entries"][0]
     content = dict(entry["content"])
 
     stored_hash = content.pop("content_hash")
@@ -209,13 +209,13 @@ async def test_c3_concurrent_no_contamination(client: AsyncClient) -> None:
 
     # Verify no cross-contamination
     resp = await client.get("/ledger", params={"thread_id": "agent-A"})
-    entries_a = resp.json()
+    entries_a = resp.json()["entries"]
     assert len(entries_a) == 1
     assert entries_a[0]["content"]["thread_id"] == "agent-A"
     assert entries_a[0]["content"]["approval"]["decision_type"] == "approve"
 
     resp = await client.get("/ledger", params={"thread_id": "agent-B"})
-    entries_b = resp.json()
+    entries_b = resp.json()["entries"]
     assert len(entries_b) == 1
     assert entries_b[0]["content"]["thread_id"] == "agent-B"
     assert entries_b[0]["content"]["approval"]["decision_type"] == "reject"
@@ -250,7 +250,7 @@ async def test_c4_double_decide_409(client: AsyncClient) -> None:
 
     # Verify only one ledger entry
     resp = await client.get("/ledger", params={"thread_id": "thread-001"})
-    assert len(resp.json()) == 1
+    assert len(resp.json()["entries"]) == 1
 
 
 # ============================================================

@@ -28,6 +28,7 @@ def test_base_metadata_has_all_tables() -> None:
         "approvals",
         "decisions",
         "ledger_entries",
+        "resume_events",
         "approvers",
         "notification_attempts",
     }

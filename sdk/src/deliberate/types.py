@@ -173,6 +173,7 @@ class LedgerEntry(BaseModel):
     approval: ApprovalRecord | None = None  # NULL if timed_out with no decision
     approval_group: ApprovalGroupRecord | None = None  # M2a: multi-approver group
     escalations: list[EscalationRecord] = Field(default_factory=list)
+    prev_hash: str | None = Field(None, description="Content hash of previous ledger entry (M3b)")
     resume: ResumeRecord | None = None
 
     content_hash: str = Field(..., description="SHA-256 of all preceding fields")

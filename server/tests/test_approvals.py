@@ -160,7 +160,7 @@ async def test_ledger_query_by_thread_id(client: AsyncClient) -> None:
     # Query ledger
     resp = await client.get("/ledger", params={"thread_id": "thread-123"})
     assert resp.status_code == 200
-    entries = resp.json()
+    entries = resp.json()["entries"]
     assert len(entries) == 1
     assert entries[0]["content"]["thread_id"] == "thread-123"
     assert entries[0]["content"]["approval"]["decision_type"] == "approve"
@@ -180,7 +180,7 @@ async def test_ledger_content_hash_deterministic(client: AsyncClient) -> None:
     await client.post(f"/approvals/{approval_id}/decide", json=decide_body)
 
     resp = await client.get("/ledger", params={"thread_id": "thread-123"})
-    entries = resp.json()
+    entries = resp.json()["entries"]
     assert len(entries) == 1
     entry = entries[0]
 
@@ -246,7 +246,7 @@ async def test_full_flow(client: AsyncClient) -> None:
 
     # 7. Query ledger
     resp = await client.get("/ledger", params={"thread_id": "thread-123"})
-    entries = resp.json()
+    entries = resp.json()["entries"]
     assert len(entries) == 1
     entry = entries[0]
     assert entry["resume_status"] == "success"

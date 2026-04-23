@@ -344,7 +344,7 @@ async def test_ledger_has_approval_group(client: AsyncClient) -> None:
 
     # Check ledger
     resp = await client.get("/ledger", params={"thread_id": "ledger-group"})
-    entries = resp.json()
+    entries = resp.json()["entries"]
     assert len(entries) >= 1
     content = entries[0]["content"]
     assert "approval_group" in content

@@ -145,6 +145,7 @@ class LedgerEntry(Base):
     resume_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     content: Mapped[dict] = mapped_column(JSONB, nullable=False)  # type: ignore[type-arg]
     content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    prev_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("NOW()")
     )
@@ -153,6 +154,24 @@ class LedgerEntry(Base):
         Index("idx_ledger_thread", "application_id", text("(content->>'thread_id')")),
         Index("idx_ledger_created", "application_id", "created_at"),
     )
+
+
+class ResumeEvent(Base):
+    """Resume event — separate from ledger to maintain ledger immutability (M3b)."""
+
+    __tablename__ = "resume_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ledger_entry_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("ledger_entries.id"), nullable=False
+    )
+    resume_status: Mapped[str] = mapped_column(Text, nullable=False)
+    resume_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    resumed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+
+    __table_args__ = (Index("idx_resume_events_ledger", "ledger_entry_id"),)
 
 
 class NotificationAttempt(Base):
