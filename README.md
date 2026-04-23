@@ -81,56 +81,14 @@ Different decisions need different information architecture. A finance lead appr
 
 <table>
 <tr>
-<td width="33%">
-
-### `financial_decision`
-Refunds, expense approvals, budget requests. Leads with amount and evidence.
-
-<img src="./docs/assets/layout-financial.png" alt="financial_decision layout" width="300"/>
-
-</td>
-<td width="33%">
-
-### `document_review`
-Contracts, policies, legal redlines. Leads with the document and flagged clauses.
-
-<img src="./docs/assets/layout-document.png" alt="document_review layout" width="300"/>
-
-</td>
-<td width="33%">
-
-### `procedure_signoff`
-Audit steps, compliance checks, quality gates. Leads with checklist and exceptions.
-
-<img src="./docs/assets/layout-procedure.png" alt="procedure_signoff layout" width="300"/>
-
-</td>
+<td width="33%"><strong><code>financial_decision</code></strong><br/>Refunds, expense approvals, budget requests. Leads with amount and evidence.<br/><br/><img src="./docs/assets/layout-financial.png" alt="financial_decision layout" width="300"/></td>
+<td width="33%"><strong><code>document_review</code></strong><br/>Contracts, policies, legal redlines. Leads with the document and flagged clauses.<br/><br/><img src="./docs/assets/layout-document.png" alt="document_review layout" width="300"/></td>
+<td width="33%"><strong><code>procedure_signoff</code></strong><br/>Audit steps, compliance checks, quality gates. Leads with checklist and exceptions.<br/><br/><img src="./docs/assets/layout-procedure.png" alt="procedure_signoff layout" width="300"/></td>
 </tr>
 <tr>
-<td width="33%">
-
-### `data_access`
-Sensitive data access, export approvals. Shows who, what, why, and risk level.
-
-<img src="./docs/assets/layout-data.png" alt="data_access layout" width="300"/>
-
-</td>
-<td width="33%">
-
-### `content_moderation`
-Generated-content review, publish approvals. Leads with the content and flags.
-
-<img src="./docs/assets/layout-content.png" alt="content_moderation layout" width="300"/>
-
-</td>
-<td width="33%">
-
-### `code_deployment`
-Automated deploys and infra changes. Leads with diff, tests, and blast radius.
-
-<img src="./docs/assets/layout-deployment.png" alt="code_deployment layout" width="300"/>
-
-</td>
+<td width="33%"><strong><code>data_access</code></strong><br/>Sensitive data access, export approvals. Shows who, what, why, and risk level.<br/><br/><img src="./docs/assets/layout-data.png" alt="data_access layout" width="300"/></td>
+<td width="33%"><strong><code>content_moderation</code></strong><br/>Generated-content review, publish approvals. Leads with the content and flags.<br/><br/><img src="./docs/assets/layout-content.png" alt="content_moderation layout" width="300"/></td>
+<td width="33%"><strong><code>code_deployment</code></strong><br/>Automated deploys and infra changes. Leads with diff, tests, and blast radius.<br/><br/><img src="./docs/assets/layout-deployment.png" alt="code_deployment layout" width="300"/></td>
 </tr>
 </table>
 
@@ -154,18 +112,19 @@ Need something else? [Build a custom layout](./docs/custom-layouts.md) — layou
 
 ## How it works
 
-```
-LangGraph Agent                    Deliberate Server                 Approver
-     |                                    |                            |
-     |-- interrupt() + @approval_gate --> |                            |
-     |                                    |-- evaluate YAML policy     |
-     |                                    |-- notify (Slack/Email/WH) --> |
-     |                                    |                            |
-     |                                    |   <-- open signed link --- |
-     |                                    |   <-- submit decision ---- |
-     |                                    |                            |
-     |   <-- Command(resume=decision) --- |-- write to ledger         |
-     |                                    |                            |
+```mermaid
+sequenceDiagram
+    participant Agent as LangGraph Agent
+    participant Server as Deliberate Server
+    participant Approver
+
+    Agent->>Server: interrupt() + @approval_gate
+    Server->>Server: Evaluate YAML policy
+    Server->>Approver: Notify (Slack / Email / Webhook)
+    Approver->>Server: Open signed approval link
+    Approver->>Server: Submit structured decision
+    Server->>Server: Write to append-only ledger
+    Server->>Agent: Command(resume=decision)
 ```
 
 1. The SDK captures the payload and posts it to Deliberate's server.
