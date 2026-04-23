@@ -52,4 +52,8 @@ pgdata/
 
 # Development artifacts (internal documents, local assets)
 docs/launch-plan.md
+docs/superpowers/
 deliberate_banner.png
+CLAUDE.md
+*_VALIDATION_REPORT.md
+prd.json
