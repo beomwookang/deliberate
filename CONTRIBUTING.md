@@ -138,8 +138,7 @@ The repository is structured as three independent packages:
 
 1. Keep PRs focused. One logical change per PR.
 2. Add or update tests for any changed behavior.
-3. Update `CLAUDE.md` session log if you introduce a significant architectural decision.
-4. Do not commit secrets. Use `.env.example` for new environment variables.
+3. Do not commit secrets. Use `.env.example` for new environment variables.
 
 ## Good First Issues
 
