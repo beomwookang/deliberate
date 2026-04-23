@@ -51,6 +51,8 @@ services:
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@example.com}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Deliberate}
       SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      SEED_FROM_YAML: "${SEED_FROM_YAML:-true}"
+      ADMIN_BOOTSTRAP_KEY: "${ADMIN_BOOTSTRAP_KEY:-}"
     ports:
       - "4000:4000"
     command: ["python", "-m", "deliberate_server.main"]

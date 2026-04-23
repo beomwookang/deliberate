@@ -43,10 +43,14 @@ docker compose up
 
 Deliberate is running on `http://localhost:4000`.
 
-**2. Install the SDK**
+**2. Install the SDK (and optionally the MCP server)**
 
 ```bash
 pip install deliberate
+
+# Optional: connect Claude Code / Cursor to your Deliberate instance
+pip install deliberate-mcp
+# or: uvx deliberate-mcp (no install required)
 ```
 
 **3. Wrap your LangGraph node**
@@ -85,11 +89,24 @@ Need something else? [Build a custom layout](./docs/custom-layouts.md) — layou
 
 ---
 
+## Agent-Friendly (M5)
+
+Deliberate is designed to be managed by AI coding assistants, not just humans editing YAML files.
+
+- **Admin REST API** — Full CRUD for policies, approvers, groups, and API keys. Test a policy against a sample payload before deploying it. See [Admin API Reference](./docs/admin-api.md).
+- **MCP Server** — `pip install deliberate-mcp` or `uvx deliberate-mcp`. Connects Claude Code, Cursor, and Windsurf directly to your Deliberate instance. 17 tools covering every admin operation. See [MCP Server Guide](./docs/mcp.md).
+- **Scoped RBAC** — 11 scopes, 4 predefined roles (`agent`, `readonly`, `operator`, `admin`), API key format `dlb_ak_*`. See [RBAC Guide](./docs/rbac.md).
+- **llms.txt** — Machine-readable project summary at [`/llms.txt`](./llms.txt) for LLM context windows.
+- **OpenAPI** — Interactive docs at `GET /docs`, machine-readable spec at `GET /openapi.json`.
+
+---
+
 ## Features
 
 - **Multi-channel notifications** — Slack, Email, or Webhook. Pick one, or fan out to all three.
 - **Timeouts and escalation** — Approver didn't respond in 4h? Auto-escalate to the backup or fail gracefully.
 - **YAML policy routing** — Declare who approves what based on payload. Auto-approve small amounts, require two sign-offs for big ones.
+- **Admin REST API** — Manage policies, approvers, groups, and API keys programmatically. No YAML editing required.
 - **Audit ledger** — Append-only, hash-chained, with JSON/CSV export. Every decision structured and tamper-evident.
 - **OTLP export** — Feed ledger events into Langfuse, Phoenix, or any OTLP-compatible collector.
 - **Prometheus metrics** — `/metrics` endpoint with interrupts, decisions, duration, timeouts, escalations.
@@ -144,6 +161,10 @@ Deliberate is at **v0.1.0** (pre-release). The core flow (SDK → server → not
 ### Documentation
 
 - [Quickstart Guide](./docs/quickstart.md) — 15-minute install-to-first-approval
+- [Admin API Reference](./docs/admin-api.md) — full REST API for managing policies, approvers, groups, and keys
+- [MCP Server Guide](./docs/mcp.md) — connect Claude Code or Cursor to your Deliberate instance
+- [RBAC Guide](./docs/rbac.md) — scopes, roles, API key lifecycle
+- [Migration Guide](./docs/migration-guide.md) — YAML to database migration (M5)
 - [Custom Layouts](./docs/custom-layouts.md) — build your own approval layouts
 - [Security & Threat Model](./docs/security.md) — STRIDE analysis, key management, production recommendations
 - [Contributing](./CONTRIBUTING.md) — development setup and PR process

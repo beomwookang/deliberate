@@ -14,6 +14,7 @@ from typing import Any
 import yaml
 from deliberate.types import ApproverDirectoryConfig, ApproverEntry, ResolvedApprover
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("deliberate_server.policy.directory")
 
@@ -41,6 +42,7 @@ class ApproverDirectory:
         self._file_hash: str = ""
         self._watcher_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
+        self._cache_valid: bool = True
 
     def load(self, file_path: str | Path) -> None:
         """Load the approver directory from a YAML file.
@@ -187,32 +189,68 @@ class ApproverDirectory:
         with self._lock:
             return len(self._groups)
 
-    def start_watching(self, poll_interval: float = 5.0) -> None:
-        """Start a background thread that polls for file changes.
+    async def load_from_db(self, session: AsyncSession) -> None:
+        """Load active approvers and groups from the database.
 
-        Uses simple polling instead of watchdog to avoid an extra dependency.
-        The poll interval is configurable (default 5s).
+        Queries all rows where is_active=True from both approvers and
+        approver_groups tables and atomically swaps the in-memory dicts.
         """
-        if self._watcher_thread is not None:
-            return
+        from sqlalchemy import select
 
-        self._stop_event.clear()
+        from deliberate_server.db.models import Approver as ApproverModel
+        from deliberate_server.db.models import ApproverGroup as ApproverGroupModel
 
-        def _watch() -> None:
-            while not self._stop_event.wait(poll_interval):
-                self.reload()
+        approver_rows_result = await session.execute(
+            select(ApproverModel).where(ApproverModel.is_active.is_(True))
+        )
+        approver_rows = approver_rows_result.scalars().all()
 
-        self._watcher_thread = threading.Thread(target=_watch, daemon=True, name="approver-watch")
-        self._watcher_thread.start()
-        logger.info("Started approver directory watcher (poll interval: %.1fs)", poll_interval)
+        group_rows_result = await session.execute(
+            select(ApproverGroupModel).where(ApproverGroupModel.is_active.is_(True))
+        )
+        group_rows = group_rows_result.scalars().all()
+
+        approvers: dict[str, ApproverEntry] = {}
+        for row in approver_rows:
+            entry = ApproverEntry(
+                id=row.id,
+                email=row.email,
+                display_name=row.display_name,
+            )
+            approvers[row.id] = entry
+
+        groups: dict[str, list[str]] = {}
+        for group_row in group_rows:
+            groups[group_row.id] = list(group_row.members)
+
+        with self._lock:
+            self._approvers = approvers
+            self._groups = groups
+            self._cache_valid = True
+
+        logger.info(
+            "Loaded approver directory from DB: %d approvers, %d groups",
+            len(approvers),
+            len(groups),
+        )
+
+    def invalidate_cache(self) -> None:
+        """Mark the in-memory approver cache as stale.
+
+        Callers should invoke load_from_db() before the next resolve() call.
+        """
+        self._cache_valid = False
+
+    def start_watching(self, poll_interval: float = 5.0) -> None:
+        """No-op. File watching replaced by API-triggered cache invalidation."""
+        logger.debug(
+            "start_watching() called but file watching is disabled — "
+            "use invalidate_cache() + load_from_db() instead"
+        )
 
     def stop_watching(self) -> None:
-        """Stop the background file watcher."""
-        self._stop_event.set()
-        if self._watcher_thread is not None:
-            self._watcher_thread.join(timeout=10)
-            self._watcher_thread = None
-            logger.info("Stopped approver directory watcher")
+        """No-op. File watching replaced by API-triggered cache invalidation."""
+        logger.debug("stop_watching() called but file watching is disabled")
 
     def to_dict(self) -> dict[str, Any]:
         """Return a summary dict for debugging/health checks."""

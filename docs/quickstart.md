@@ -83,7 +83,11 @@ You should see:
 
 ### 4. Set up approvers and policies
 
-By default, the config files are in `./config/`:
+You have two options for configuring approvers and policies:
+
+**Option A: Edit YAML files (default)**
+
+The config files are in `./config/`:
 
 - **Approvers**: `./config/approvers.yaml` — who can approve what
 - **Policies**: `./examples/policies/refund.yaml` — rules for routing approvals
@@ -96,6 +100,80 @@ cat examples/policies/refund.yaml
 ```
 
 For now, leave them as-is. See **Configuration Reference** below if you want to customize.
+
+**Option B: Configure via API**
+
+If you prefer to manage configuration programmatically (useful for CI/CD, MCP-assisted setup, or multi-environment deployments), use the Admin REST API instead of editing YAML files.
+
+First, set your bootstrap admin key in `.env`:
+
+```bash
+ADMIN_BOOTSTRAP_KEY=dlb_ak_your-bootstrap-key-here
+```
+
+Then create approvers and policies via cURL:
+
+```bash
+# Create an approver
+curl -X POST http://localhost:4000/approvers \
+  -H "X-Deliberate-API-Key: ${ADMIN_BOOTSTRAP_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "finance_lead",
+    "email": "priya@example.com",
+    "display_name": "Priya Sharma"
+  }'
+
+# Create a group
+curl -X POST http://localhost:4000/groups \
+  -H "X-Deliberate-API-Key: ${ADMIN_BOOTSTRAP_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "finance_team",
+    "display_name": "Finance Team",
+    "members": ["finance_lead"]
+  }'
+
+# Create a policy
+curl -X POST http://localhost:4000/policies \
+  -H "X-Deliberate-API-Key: ${ADMIN_BOOTSTRAP_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "refund_approval",
+    "matches": { "layout": "financial_decision" },
+    "rules": [
+      {
+        "name": "auto_approve_small",
+        "when": "amount.value < 100",
+        "action": "auto_approve"
+      },
+      {
+        "name": "standard",
+        "when": "amount.value >= 100",
+        "approvers": { "any_of": ["finance_team"] },
+        "timeout": "4h",
+        "on_timeout": "escalate",
+        "escalate_to": "finance_lead",
+        "notify": ["email"]
+      }
+    ]
+  }'
+```
+
+Test the policy against a sample payload before deploying:
+
+```bash
+curl -X POST http://localhost:4000/policies/refund_approval/test \
+  -H "X-Deliberate-API-Key: ${ADMIN_BOOTSTRAP_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": "Refund for order #123",
+    "layout": "financial_decision",
+    "amount": { "value": 250.00, "currency": "USD" }
+  }'
+```
+
+See the [Admin API Reference](./admin-api.md) for the full endpoint documentation.
 
 ### 5. Run the example agent
 

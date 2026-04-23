@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -20,6 +21,8 @@ from deliberate_server.config import settings
 
 APPROVAL_TOKEN_AUDIENCE = "deliberate-approval"
 APPROVAL_TOKEN_EXPIRY_DAYS = 7
+
+API_KEY_PREFIX = "dlb_ak_"
 
 
 def _derive_key(master_key: str, info: bytes, length: int = 32) -> bytes:
@@ -110,3 +113,12 @@ def sign_decision(fields: dict[str, Any]) -> str:
         canonical.encode(),
         hashlib.sha256,
     ).hexdigest()
+
+
+def generate_api_key() -> tuple[str, str, str]:
+    """Generate a new API key. Returns (raw_key, key_prefix, key_hash)."""
+    random_bytes = secrets.token_urlsafe(32)
+    raw_key = f"{API_KEY_PREFIX}{random_bytes}"
+    key_prefix = raw_key[:16]
+    key_hash_value = hash_api_key(raw_key)
+    return raw_key, key_prefix, key_hash_value

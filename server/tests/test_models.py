@@ -24,12 +24,16 @@ def test_base_metadata_has_all_tables() -> None:
     table_names = set(Base.metadata.tables.keys())
     expected = {
         "applications",
+        "api_keys",
         "interrupts",
         "approvals",
         "decisions",
         "ledger_entries",
         "resume_events",
         "approvers",
+        "approver_groups",
         "notification_attempts",
+        "policies",
+        "policy_versions",
     }
     assert expected == table_names

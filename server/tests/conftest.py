@@ -16,17 +16,20 @@ os.environ.setdefault(
     "postgresql+asyncpg://deliberate:deliberate@localhost:5432/deliberate",
 )
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from deliberate_server.auth import hash_api_key
+from deliberate_server.auth import generate_api_key, hash_api_key
 from deliberate_server.config import settings
 from deliberate_server.db.models import Base
 
 _TEST_DB_URL = settings.database_url
+
+_test_keys: dict[str, str] = {}
 
 
 @pytest_asyncio.fixture
@@ -65,6 +68,73 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
             {"id": "default", "name": "Default Application", "hash": key_hash},
         )
 
+    # Seed API keys via raw SQL (consistent with application seed above)
+    _admin_raw, _admin_prefix, _admin_hash = generate_api_key()
+    _agent_raw, _agent_prefix, _agent_hash = generate_api_key()
+    _legacy_hash = hash_api_key("test-api-key")
+
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO api_keys "
+                "(id, application_id, name, key_prefix, key_hash, scopes, created_by) "
+                "VALUES (gen_random_uuid(), :app, :name, :prefix, :hash, :scopes, :by)"
+            ),
+            {
+                "app": "default",
+                "name": "test-admin",
+                "prefix": _admin_prefix,
+                "hash": _admin_hash,
+                "scopes": [
+                    "interrupts:write",
+                    "approvals:read",
+                    "approvals:write",
+                    "policies:read",
+                    "policies:write",
+                    "approvers:read",
+                    "approvers:write",
+                    "api_keys:read",
+                    "api_keys:write",
+                    "ledger:read",
+                    "ledger:export",
+                ],
+                "by": "test",
+            },
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO api_keys "
+                "(id, application_id, name, key_prefix, key_hash, scopes, created_by) "
+                "VALUES (gen_random_uuid(), :app, :name, :prefix, :hash, :scopes, :by)"
+            ),
+            {
+                "app": "default",
+                "name": "test-agent",
+                "prefix": _agent_prefix,
+                "hash": _agent_hash,
+                "scopes": ["interrupts:write", "approvals:read"],
+                "by": "test",
+            },
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO api_keys "
+                "(id, application_id, name, key_prefix, key_hash, scopes, created_by) "
+                "VALUES (gen_random_uuid(), :app, :name, :prefix, :hash, :scopes, :by)"
+            ),
+            {
+                "app": "default",
+                "name": "legacy-test",
+                "prefix": "test-api-key-"[:16],
+                "hash": _legacy_hash,
+                "scopes": ["interrupts:write", "approvals:read", "approvals:write", "ledger:read"],
+                "by": "test",
+            },
+        )
+
+    _test_keys["admin"] = _admin_raw
+    _test_keys["agent"] = _agent_raw
+
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     # Patch the app's session factory
@@ -81,3 +151,13 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
 
     session_module.async_session = original
     await engine.dispose()
+
+
+@pytest.fixture
+def admin_api_key() -> str:
+    return _test_keys["admin"]
+
+
+@pytest.fixture
+def agent_api_key() -> str:
+    return _test_keys["agent"]

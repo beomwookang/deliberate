@@ -78,6 +78,27 @@ async def client():
             ),
             {"id": "default", "name": "Test App", "hash": hash_api_key(API_KEY)},
         )
+        await conn.execute(
+            text(
+                "INSERT INTO api_keys "
+                "(id, application_id, name, key_prefix, key_hash, scopes, created_by) "
+                "VALUES (gen_random_uuid(), :app, :name, :prefix, :hash, :scopes, :by)"
+            ),
+            {
+                "app": "default",
+                "name": "group-test",
+                "prefix": API_KEY[:16],
+                "hash": hash_api_key(API_KEY),
+                "scopes": [
+                    "interrupts:write",
+                    "approvals:read",
+                    "approvals:write",
+                    "ledger:read",
+                    "ledger:export",
+                ],
+                "by": "test",
+            },
+        )
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     import deliberate_server.db.session as session_module
@@ -343,7 +364,7 @@ async def test_ledger_has_approval_group(client: AsyncClient) -> None:
     assert resp.status_code == 200
 
     # Check ledger
-    resp = await client.get("/ledger", params={"thread_id": "ledger-group"})
+    resp = await client.get("/ledger", params={"thread_id": "ledger-group"}, headers=API_KEY_HEADER)
     entries = resp.json()["entries"]
     assert len(entries) >= 1
     content = entries[0]["content"]

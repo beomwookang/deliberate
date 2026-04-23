@@ -9,11 +9,12 @@ import json
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Header, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select, text
 
+from deliberate_server.api.deps import authenticate_api_key
 from deliberate_server.db.models import LedgerEntry
 from deliberate_server.db.session import async_session
 
@@ -40,6 +41,7 @@ class LedgerQueryResponse(BaseModel):
 
 @router.get("", response_model=LedgerQueryResponse)
 async def query_ledger(
+    x_deliberate_api_key: str = Header(..., alias="X-Deliberate-API-Key"),
     thread_id: str | None = Query(None, description="Filter by LangGraph thread ID"),
     approver_id: str | None = Query(None, description="Filter by approver ID"),
     date_from: datetime | None = Query(None, description="Filter from date (inclusive)"),  # noqa: B008
@@ -50,6 +52,7 @@ async def query_ledger(
 ) -> LedgerQueryResponse:
     """Query ledger entries with filters and cursor-based pagination."""
     async with async_session() as session:
+        await authenticate_api_key(x_deliberate_api_key, session, required_scope="ledger:read")
         stmt = select(LedgerEntry).order_by(LedgerEntry.created_at.desc(), LedgerEntry.id.desc())
 
         # Apply filters
@@ -129,6 +132,7 @@ async def query_ledger(
 
 @router.get("/export/json")
 async def export_ledger_json(
+    x_deliberate_api_key: str = Header(..., alias="X-Deliberate-API-Key"),
     thread_id: str | None = Query(None),
     approver_id: str | None = Query(None),
     date_from: datetime | None = Query(None),  # noqa: B008
@@ -137,6 +141,7 @@ async def export_ledger_json(
 ) -> StreamingResponse:
     """Export ledger entries as JSON file."""
     async with async_session() as session:
+        await authenticate_api_key(x_deliberate_api_key, session, required_scope="ledger:export")
         stmt = select(LedgerEntry).order_by(LedgerEntry.created_at.desc())
 
         if thread_id:
@@ -172,6 +177,7 @@ async def export_ledger_json(
 
 @router.get("/export/csv")
 async def export_ledger_csv(
+    x_deliberate_api_key: str = Header(..., alias="X-Deliberate-API-Key"),
     thread_id: str | None = Query(None),
     approver_id: str | None = Query(None),
     date_from: datetime | None = Query(None),  # noqa: B008
@@ -180,6 +186,7 @@ async def export_ledger_csv(
 ) -> StreamingResponse:
     """Export ledger entries as CSV file."""
     async with async_session() as session:
+        await authenticate_api_key(x_deliberate_api_key, session, required_scope="ledger:export")
         stmt = select(LedgerEntry).order_by(LedgerEntry.created_at.desc())
 
         if thread_id:

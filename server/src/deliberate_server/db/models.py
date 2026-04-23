@@ -17,8 +17,9 @@ from sqlalchemy import (
     Text,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.schema import UniqueConstraint
 
 
 class Base(DeclarativeBase):
@@ -35,6 +36,38 @@ class Application(Base):
     api_key_hash: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+
+
+class ApiKey(Base):
+    """Named API keys with scopes, per-application, replacing single hash on Application."""
+
+    __tablename__ = "api_keys"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    application_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("applications.id"), nullable=False, server_default=text("'default'")
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    key_prefix: Mapped[str] = mapped_column(Text, nullable=False)
+    key_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    scopes: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False)
+    created_by: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_api_keys_hash", "key_hash", unique=True),
+        Index("ix_api_keys_app", "application_id"),
     )
 
 
@@ -205,8 +238,12 @@ class Approver(Base):
     __tablename__ = "approvers"
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
+    application_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("applications.id"), nullable=False, server_default=text("'default'")
+    )
     email: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
     ooo_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("FALSE")
     )  # Reserved for v1.1+
@@ -219,3 +256,74 @@ class Approver(Base):
     ooo_delegate_to: Mapped[str | None] = mapped_column(
         Text, ForeignKey("approvers.id"), nullable=True
     )  # Reserved for v1.1+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+
+
+class PolicyRecord(Base):
+    """Active policy configuration for an application."""
+
+    __tablename__ = "policies"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    application_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("applications.id"), nullable=False, server_default=text("'default'")
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    definition: Mapped[dict] = mapped_column(JSONB, nullable=False)  # type: ignore[type-arg]
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+
+    __table_args__ = (UniqueConstraint("application_id", "name", name="uq_policies_app_name"),)
+
+
+class PolicyVersion(Base):
+    """Immutable version history for policy changes."""
+
+    __tablename__ = "policy_versions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    policy_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("policies.id"), nullable=False
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    definition: Mapped[dict] = mapped_column(JSONB, nullable=False)  # type: ignore[type-arg]
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    changed_by: Mapped[str] = mapped_column(Text, nullable=False)
+    change_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+
+    __table_args__ = (Index("ix_policy_versions_policy", "policy_id", "version"),)
+
+
+class ApproverGroup(Base):
+    """Named groups of approvers for use in policies."""
+
+    __tablename__ = "approver_groups"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    application_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("applications.id"), nullable=False, server_default=text("'default'")
+    )
+    display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    members: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("TRUE"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("NOW()")
+    )
+
+    __table_args__ = (Index("ix_approver_groups_app", "application_id"),)

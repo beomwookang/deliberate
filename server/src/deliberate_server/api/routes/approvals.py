@@ -7,10 +7,11 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from deliberate_server.api.deps import authenticate_api_key
 from deliberate_server.auth import compute_content_hash, sign_content_hash, sign_decision
 from deliberate_server.db.models import Approval, Decision, Interrupt
 from deliberate_server.db.models import LedgerEntry as LedgerEntryModel
@@ -72,10 +73,40 @@ class ResumeAckResponse(BaseModel):
 # --- Endpoints ---
 
 
+@router.get("")
+async def list_approvals(
+    x_deliberate_api_key: str = Header(..., alias="X-Deliberate-API-Key"),
+    status: str | None = None,
+) -> list[dict[str, Any]]:
+    """List approvals with optional status filter."""
+    async with async_session() as session:
+        await authenticate_api_key(x_deliberate_api_key, session, required_scope="approvals:read")
+        query = select(Approval).order_by(Approval.created_at.desc()).limit(100)
+        if status:
+            query = query.where(Approval.status == status)
+        result = await session.execute(query)
+        approvals = result.scalars().all()
+        return [
+            {
+                "id": str(a.id),
+                "interrupt_id": str(a.interrupt_id),
+                "status": a.status,
+                "approver_id": a.approver_id,
+                "approval_group_id": str(a.approval_group_id) if a.approval_group_id else None,
+                "created_at": a.created_at.isoformat(),
+            }
+            for a in approvals
+        ]
+
+
 @router.get("/{approval_id}/status", response_model=StatusResponse)
-async def get_approval_status(approval_id: uuid.UUID) -> StatusResponse:
+async def get_approval_status(
+    approval_id: uuid.UUID,
+    x_deliberate_api_key: str = Header(..., alias="X-Deliberate-API-Key"),
+) -> StatusResponse:
     """Poll for approval status."""
     async with async_session() as session:
+        await authenticate_api_key(x_deliberate_api_key, session, required_scope="approvals:read")
         approval = await session.get(Approval, approval_id)
         if approval is None:
             raise HTTPException(status_code=404, detail="Approval not found")
@@ -103,9 +134,13 @@ async def get_approval_status(approval_id: uuid.UUID) -> StatusResponse:
 
 
 @router.get("/{approval_id}/payload", response_model=PayloadResponse)
-async def get_approval_payload(approval_id: uuid.UUID) -> PayloadResponse:
+async def get_approval_payload(
+    approval_id: uuid.UUID,
+    x_deliberate_api_key: str = Header(..., alias="X-Deliberate-API-Key"),
+) -> PayloadResponse:
     """Fetch the interrupt payload for rendering the approval UI."""
     async with async_session() as session:
+        await authenticate_api_key(x_deliberate_api_key, session, required_scope="approvals:read")
         approval = await session.get(Approval, approval_id)
         if approval is None:
             raise HTTPException(status_code=404, detail="Approval not found")

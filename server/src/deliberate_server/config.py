@@ -51,6 +51,12 @@ class Settings(BaseSettings):
     # Webhook (optional — per-webhook secrets are in webhooks.yaml)
     webhook_signing_secret: str = ""
 
+    # Seeding
+    seed_from_yaml: bool = True
+
+    # Admin bootstrap (set to create first admin key on startup)
+    admin_bootstrap_key: str = ""
+
     # Worker
     worker_poll_interval_seconds: int = 15
     max_escalation_depth: int = 3

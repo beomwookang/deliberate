@@ -17,13 +17,13 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from deliberate_server.api.deps import authenticate_api_key
 from deliberate_server.auth import (
     compute_content_hash,
     sign_content_hash,
-    verify_api_key,
 )
 from deliberate_server.config import settings
-from deliberate_server.db.models import Application, Approval, Interrupt
+from deliberate_server.db.models import Approval, Interrupt
 from deliberate_server.db.models import LedgerEntry as LedgerEntryModel
 from deliberate_server.db.session import async_session
 from deliberate_server.metrics import INTERRUPTS_TOTAL
@@ -73,19 +73,11 @@ async def submit_interrupt(
     4. If auto_approve: write ledger entry directly, return immediately
     5. If request_human: create approval row(s), return pending
     """
-    # Authenticate: look up application by hashed API key
+    # Authenticate: validate API key and check scope
     async with async_session() as session:
-        result = await session.execute(select(Application))
-        applications = result.scalars().all()
-
-    app_row: Application | None = None
-    for app in applications:
-        if verify_api_key(x_deliberate_api_key, app.api_key_hash):
-            app_row = app
-            break
-
-    if app_row is None:
-        raise HTTPException(status_code=401, detail="Invalid API key")
+        api_key = await authenticate_api_key(
+            x_deliberate_api_key, session, required_scope="interrupts:write"
+        )
 
     # Enforce 1MB payload cap (PRD §4.3)
     payload_size = len(_json.dumps(body.payload).encode())
@@ -109,9 +101,13 @@ async def submit_interrupt(
     interrupt_id = uuid.uuid4()
 
     if plan.action == "auto_approve":
-        return await _handle_auto_approve(body, app_row, validated_payload, plan, interrupt_id, now)
+        return await _handle_auto_approve(
+            body, api_key.application_id, validated_payload, plan, interrupt_id, now
+        )
 
-    return await _handle_request_human(body, app_row, validated_payload, plan, interrupt_id, now)
+    return await _handle_request_human(
+        body, api_key.application_id, validated_payload, plan, interrupt_id, now
+    )
 
 
 def _evaluate_policy(payload: dict[str, Any]) -> ResolvedPlan:
@@ -156,7 +152,7 @@ def _evaluate_policy(payload: dict[str, Any]) -> ResolvedPlan:
 
 async def _handle_auto_approve(
     body: InterruptRequest,
-    app_row: Application,
+    application_id: str,
     validated_payload: InterruptPayload,
     plan: ResolvedPlan,
     interrupt_id: uuid.UUID,
@@ -168,7 +164,7 @@ async def _handle_auto_approve(
     async with async_session() as session, session.begin():
         interrupt_row = Interrupt(
             id=interrupt_id,
-            application_id=app_row.id,
+            application_id=application_id,
             thread_id=body.thread_id,
             trace_id=body.trace_id,
             layout=validated_payload.layout,
@@ -193,7 +189,7 @@ async def _handle_auto_approve(
             "created_at": now.isoformat(),
             "thread_id": body.thread_id,
             "trace_id": body.trace_id,
-            "application_id": app_row.id,
+            "application_id": application_id,
             "interrupt": body.payload,
             "policy_evaluation": {
                 "matched_rule": plan.matched_rule_name,
@@ -225,7 +221,7 @@ async def _handle_auto_approve(
 
         ledger_entry = LedgerEntryModel(
             id=ledger_id,
-            application_id=app_row.id,
+            application_id=application_id,
             interrupt_id=interrupt_id,
             decision_id=None,
             resume_status="auto_approved",
@@ -259,7 +255,7 @@ async def _handle_auto_approve(
 
 async def _handle_request_human(
     body: InterruptRequest,
-    app_row: Application,
+    application_id: str,
     validated_payload: InterruptPayload,
     plan: ResolvedPlan,
     interrupt_id: uuid.UUID,
@@ -273,7 +269,7 @@ async def _handle_request_human(
     async with async_session() as session, session.begin():
         interrupt_row = Interrupt(
             id=interrupt_id,
-            application_id=app_row.id,
+            application_id=application_id,
             thread_id=body.thread_id,
             trace_id=body.trace_id,
             layout=validated_payload.layout,
@@ -352,7 +348,7 @@ async def _handle_request_human(
         results = await notification_dispatcher.dispatch(
             plan=plan,
             approval_id=first_approval_id,
-            application_id=app_row.id,
+            application_id=application_id,
             payload=body.payload,
             approval_url=approval_url,
         )

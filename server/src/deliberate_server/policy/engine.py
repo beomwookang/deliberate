@@ -14,6 +14,7 @@ from typing import Any, Literal
 import yaml
 from deliberate.types import ResolvedApprover
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from deliberate_server.policy.directory import ApproverDirectory, ApproverNotFoundError
 from deliberate_server.policy.evaluator import evaluate
@@ -75,6 +76,7 @@ class PolicyEngine:
         self._policies: list[_LoadedPolicy] = []
         self._policy_dir: Path | None = None
         self._file_hashes: dict[str, str] = {}  # path -> hash for reload detection
+        self._cache_valid: bool = True
 
     def load_policies(self, directory: str | Path) -> None:
         """Load all YAML policy files from the given directory.
@@ -179,12 +181,66 @@ class PolicyEngine:
             logger.warning("Failed to hot-reload policies (keeping current state): %s", e)
             return False
 
+    async def load_from_db(self, session: AsyncSession) -> None:
+        """Load active policies from the database, replacing the current in-memory list.
+
+        Queries all rows where is_active=True, parses each row's definition JSONB
+        field as a Policy, and pre-compiles rule expressions.
+        """
+        from sqlalchemy import select
+
+        from deliberate_server.db.models import PolicyRecord
+
+        result = await session.execute(select(PolicyRecord).where(PolicyRecord.is_active.is_(True)))
+        rows = result.scalars().all()
+
+        policies: list[_LoadedPolicy] = []
+        for row in rows:
+            try:
+                policy = Policy(**row.definition)
+            except (ValidationError, Exception) as e:
+                logger.warning(
+                    "Skipping policy '%s' (id=%s) from DB — invalid schema: %s",
+                    row.name,
+                    row.id,
+                    e,
+                )
+                continue
+            try:
+                loaded = _LoadedPolicy(policy, row.content_hash, f"db:{row.id}")
+            except PolicyLoadError as e:
+                logger.warning(
+                    "Skipping policy '%s' (id=%s) from DB — expression error: %s",
+                    row.name,
+                    row.id,
+                    e,
+                )
+                continue
+            policies.append(loaded)
+
+        self._policies = policies
+        self._cache_valid = True
+        logger.info("Loaded %d policies from database", len(policies))
+
+    def invalidate_cache(self) -> None:
+        """Mark the in-memory policy cache as stale.
+
+        The next caller responsible for serving requests should call load_from_db()
+        before evaluating. evaluate() will log a warning if called while stale.
+        """
+        self._cache_valid = False
+
     def evaluate(self, payload: dict[str, Any]) -> ResolvedPlan:
         """Evaluate loaded policies against an interrupt payload.
 
         Returns a ResolvedPlan describing the action, approvers, and channels.
         Raises NoMatchingPolicyError if no policy matches.
         """
+        if not self._cache_valid:
+            logger.warning(
+                "PolicyEngine.evaluate() called with stale cache — "
+                "caller should have called load_from_db() after invalidate_cache()"
+            )
         layout = payload.get("layout", "")
         subject = payload.get("subject", "")
 

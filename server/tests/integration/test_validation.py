@@ -68,6 +68,27 @@ async def client():
             ),
             {"id": "default", "name": "Test App", "hash": hash_api_key(API_KEY)},
         )
+        await conn.execute(
+            text(
+                "INSERT INTO api_keys "
+                "(id, application_id, name, key_prefix, key_hash, scopes, created_by) "
+                "VALUES (gen_random_uuid(), :app, :name, :prefix, :hash, :scopes, :by)"
+            ),
+            {
+                "app": "default",
+                "name": "validation-test",
+                "prefix": API_KEY[:16],
+                "hash": hash_api_key(API_KEY),
+                "scopes": [
+                    "interrupts:write",
+                    "approvals:read",
+                    "approvals:write",
+                    "ledger:read",
+                    "ledger:export",
+                ],
+                "by": "test",
+            },
+        )
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     import deliberate_server.db.session as session_module
@@ -120,13 +141,13 @@ async def test_c1_decision_type_round_trip(
     assert resp.status_code == 200
 
     # Verify status endpoint
-    resp = await client.get(f"/approvals/{approval_id}/status")
+    resp = await client.get(f"/approvals/{approval_id}/status", headers=API_KEY_HEADER)
     data = resp.json()
     assert data["decision_type"] == decision_type
     assert data["decision_payload"] == decision_payload
 
     # Verify ledger
-    resp = await client.get("/ledger", params={"thread_id": "thread-001"})
+    resp = await client.get("/ledger", params={"thread_id": "thread-001"}, headers=API_KEY_HEADER)
     entries = resp.json()["entries"]
     assert len(entries) >= 1
     content = entries[0]["content"]
@@ -157,7 +178,7 @@ async def test_c2_content_hash_verifiable(client: AsyncClient, i: int) -> None:
     }
     await client.post(f"/approvals/{approval_id}/decide", json=decide_body)
 
-    resp = await client.get("/ledger", params={"thread_id": thread_id})
+    resp = await client.get("/ledger", params={"thread_id": thread_id}, headers=API_KEY_HEADER)
     entry = resp.json()["entries"][0]
     content = dict(entry["content"])
 
@@ -208,13 +229,13 @@ async def test_c3_concurrent_no_contamination(client: AsyncClient) -> None:
         )
 
     # Verify no cross-contamination
-    resp = await client.get("/ledger", params={"thread_id": "agent-A"})
+    resp = await client.get("/ledger", params={"thread_id": "agent-A"}, headers=API_KEY_HEADER)
     entries_a = resp.json()["entries"]
     assert len(entries_a) == 1
     assert entries_a[0]["content"]["thread_id"] == "agent-A"
     assert entries_a[0]["content"]["approval"]["decision_type"] == "approve"
 
-    resp = await client.get("/ledger", params={"thread_id": "agent-B"})
+    resp = await client.get("/ledger", params={"thread_id": "agent-B"}, headers=API_KEY_HEADER)
     entries_b = resp.json()["entries"]
     assert len(entries_b) == 1
     assert entries_b[0]["content"]["thread_id"] == "agent-B"
@@ -249,7 +270,7 @@ async def test_c4_double_decide_409(client: AsyncClient) -> None:
     assert resp.status_code == 409
 
     # Verify only one ledger entry
-    resp = await client.get("/ledger", params={"thread_id": "thread-001"})
+    resp = await client.get("/ledger", params={"thread_id": "thread-001"}, headers=API_KEY_HEADER)
     assert len(resp.json()["entries"]) == 1
 
 
@@ -261,7 +282,7 @@ async def test_c4_double_decide_409(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_c5_payload_not_found(client: AsyncClient) -> None:
     fake_id = str(uuid.uuid4())
-    resp = await client.get(f"/approvals/{fake_id}/payload")
+    resp = await client.get(f"/approvals/{fake_id}/payload", headers=API_KEY_HEADER)
     assert resp.status_code == 404
 
 
@@ -379,7 +400,11 @@ async def test_c7_client_timeout(client: AsyncClient) -> None:
 
     sdk_client = DeliberateClient(base_url="http://test", api_key=API_KEY)
     transport = ASGITransport(app=app)  # type: ignore[arg-type]
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as http:
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"X-Deliberate-API-Key": API_KEY},
+    ) as http:
         sdk_client._http = http
 
         with pytest.raises(DeliberateTimeoutError) as exc_info:
@@ -394,5 +419,5 @@ async def test_c7_client_timeout(client: AsyncClient) -> None:
         assert approval_id in str(exc_info.value)
 
     # Verify server state unchanged
-    resp = await client.get(f"/approvals/{approval_id}/status")
+    resp = await client.get(f"/approvals/{approval_id}/status", headers=API_KEY_HEADER)
     assert resp.json()["status"] == "pending"

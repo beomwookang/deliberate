@@ -1,0 +1,202 @@
+# Deliberate
+
+Deliberate is a human-in-the-loop (HITL) approval layer for LangGraph agents. When an agent needs a human to review and approve an action before proceeding, Deliberate handles the full lifecycle: routing the request to the right approver, sending notifications, rendering a structured approval UI, capturing an audit trail, and resuming the agent with the decision.
+
+Deliberate is self-hosted. The server is a FastAPI application backed by PostgreSQL. The agent SDK is a Python package that wraps LangGraph's interrupt() primitive.
+
+
+## Core Concepts
+
+Interrupt: A pause point in a LangGraph agent where human approval is required. The SDK submits an interrupt payload to the Deliberate server and blocks until a decision is returned.
+
+Policy: A YAML or database-stored rule set that determines who approves a given interrupt, how long to wait, and what to do on timeout. Policies are evaluated top-to-bottom; the first matching rule wins.
+
+Approver: An individual or group that can submit decisions on approval requests. Defined in approvers.yaml or via the Admin REST API. Groups allow any_of (first to decide wins) or all_of (all must decide) semantics.
+
+Group: A named collection of approvers used in policy rules. A group approval creates one approval row per member (all_of) or a single shared row (any_of).
+
+Ledger: An append-only, hash-chained audit log stored in PostgreSQL. Every significant action (interrupt received, auto-approved, decision recorded, timeout, escalation) writes an immutable ledger entry with a SHA-256 content hash and HMAC signature.
+
+
+## Authentication Model
+
+All agent API calls and admin API calls require an API key passed in the request header:
+
+    X-Deliberate-API-Key: <key>
+
+API keys have the format: dlb_ak_<random>
+
+Keys are scoped. The available scopes are:
+
+    interrupts:write      Submit interrupts (agents)
+    approvals:read        Read approval status and payload
+    ledger:read           Query the audit ledger
+    policies:read         List and read policies
+    policies:write        Create, update, delete policies
+    approvers:read        List and read approvers
+    approvers:write       Create, update, delete approvers
+    api_keys:read         List API keys
+    api_keys:write        Create and revoke API keys
+
+Predefined roles (sets of scopes):
+
+    agent      interrupts:write, approvals:read
+    readonly   policies:read, approvers:read, ledger:read, api_keys:read
+    operator   readonly + policies:write, approvers:write
+    admin      all scopes including api_keys:write
+
+The bootstrap admin key is set via the ADMIN_BOOTSTRAP_KEY environment variable. Use it to create the first scoped API key, then treat ADMIN_BOOTSTRAP_KEY as a root credential stored in a secrets manager.
+
+
+## Admin API Endpoints
+
+Base path: http://localhost:4000
+
+Policies:
+    POST   /policies                   Create a policy (policies:write)
+    GET    /policies                   List all policies (policies:read)
+    GET    /policies/{name}            Get a policy by name (policies:read)
+    PUT    /policies/{name}            Replace a policy (policies:write)
+    DELETE /policies/{name}            Delete a policy (policies:write)
+    POST   /policies/{name}/test       Test a policy against a sample payload (policies:read)
+    GET    /policies/{name}/versions   List historical versions of a policy (policies:read)
+
+Approvers:
+    POST   /approvers                  Create an approver (approvers:write)
+    GET    /approvers                  List all approvers (approvers:read)
+    GET    /approvers/{id}             Get an approver (approvers:read)
+    PUT    /approvers/{id}             Update an approver (approvers:write)
+    DELETE /approvers/{id}             Delete an approver (approvers:write)
+
+Groups:
+    POST   /groups                     Create a group (approvers:write)
+    GET    /groups                     List all groups (approvers:read)
+    GET    /groups/{id}                Get a group (approvers:read)
+    DELETE /groups/{id}                Delete a group (approvers:write)
+
+API Keys:
+    POST   /api-keys                   Create an API key (api_keys:write)
+    GET    /api-keys                   List all API keys (api_keys:read)
+    DELETE /api-keys/{id}              Revoke an API key (api_keys:write)
+
+
+## Agent API Endpoints
+
+    POST   /interrupts                          Submit an interrupt (interrupts:write)
+    GET    /approvals/{id}/status               Poll for a decision (approvals:read)
+    GET    /approvals/{id}/payload              Fetch interrupt payload for UI rendering (approvals:read)
+    POST   /approvals/{id}/decide               Submit a decision (approver UI; no API key required)
+    POST   /approvals/{id}/resume-ack           Acknowledge resume after decision (interrupts:write)
+    GET    /approval-groups/{group_id}/status   Poll group status for all_of approvals (approvals:read)
+    GET    /ledger                              Query audit ledger (ledger:read)
+    GET    /ledger/export/json                  Export ledger as JSON (ledger:read)
+    GET    /ledger/export/csv                   Export ledger as CSV (ledger:read)
+
+Auth endpoints (no API key required):
+    POST   /auth/magic-link                     Request magic link for approver
+    POST   /auth/verify-magic-link              Exchange magic link token for session
+    POST   /auth/verify-session                 Validate session token
+    POST   /auth/verify-approval-token          Validate signed approval JWT
+
+Observability:
+    GET    /health                              Health check
+    GET    /metrics                             Prometheus metrics
+
+
+## Common Tasks
+
+### Add HITL to a LangGraph agent
+
+1. Install the SDK:
+       pip install deliberate
+
+2. Set environment variables in the agent's environment:
+       DELIBERATE_SERVER_URL=http://localhost:4000
+       DELIBERATE_API_KEY=dlb_ak_<your-agent-key>
+
+3. Wrap the LangGraph node with @approval_gate:
+
+       from deliberate import approval_gate
+
+       @approval_gate(layout="financial_decision")
+       def process_refund(state):
+           return {
+               "subject": f"Refund for customer #{state['customer_id']}",
+               "amount": {"value": state["amount"], "currency": "USD"},
+               "customer": {"id": state["customer_id"], "display_name": state["name"]},
+               "agent_reasoning": state["reasoning"],
+           }
+
+4. Add the node to your LangGraph graph:
+
+       graph.add_node("process_refund", process_refund)
+
+When the graph reaches that node, the decorator submits the payload to Deliberate, waits for a human decision, and returns the decision into the graph state.
+
+
+### Test a policy before deploying
+
+Use POST /policies/{name}/test with a sample payload:
+
+    curl -X POST http://localhost:4000/policies/refund_approval/test \
+      -H "X-Deliberate-API-Key: dlb_ak_..." \
+      -H "Content-Type: application/json" \
+      -d '{
+        "subject": "Refund for order #123",
+        "layout": "financial_decision",
+        "amount": {"value": 150.00, "currency": "USD"},
+        "customer": {"id": "C-001"}
+      }'
+
+The response shows which rule matched and how the approval would be routed.
+
+
+### Create an approver via API
+
+    curl -X POST http://localhost:4000/approvers \
+      -H "X-Deliberate-API-Key: dlb_ak_..." \
+      -H "Content-Type: application/json" \
+      -d '{
+        "id": "finance_lead",
+        "email": "priya@example.com",
+        "display_name": "Priya Sharma"
+      }'
+
+
+### Create a policy via API
+
+    curl -X POST http://localhost:4000/policies \
+      -H "X-Deliberate-API-Key: dlb_ak_..." \
+      -H "Content-Type: application/json" \
+      -d '{
+        "name": "refund_approval",
+        "matches": {"layout": "financial_decision"},
+        "rules": [
+          {
+            "name": "auto_approve_small",
+            "when": "amount.value < 100",
+            "action": "auto_approve"
+          },
+          {
+            "name": "standard",
+            "when": "amount.value >= 100",
+            "approvers": {"any_of": ["finance_lead"]},
+            "timeout": "4h",
+            "on_timeout": "escalate",
+            "escalate_to": "finance_lead",
+            "notify": ["email", "slack"]
+          }
+        ]
+      }'
+
+
+## References
+
+- OpenAPI spec: GET /openapi.json
+- Interactive docs: GET /docs
+- Admin API reference: docs/admin-api.md
+- RBAC and scopes: docs/rbac.md
+- MCP server: docs/mcp.md
+- Security model: docs/security.md
+- Custom layouts: docs/custom-layouts.md
+- Quickstart: docs/quickstart.md

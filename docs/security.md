@@ -184,11 +184,31 @@ The magic link email is sent when an interrupt is created (if `notify: [email]` 
 
 Approval URLs use signed JWT tokens (`/a/{jwt}`) with approver binding and expiry. Raw UUIDs are also accepted for backward compatibility. The token is verified by the approval page before rendering. jti replay prevention is planned for v1.1.
 
-### No Role-Based Access Control
+### No Role-Based Access Control on the Decision Endpoint
 
-v1.0 has no RBAC. Any approver who receives a valid approval URL can submit a decision. Policy configuration is the primary access control mechanism: only approvers named in a policy rule will receive notification emails. However, there is no enforcement at the decision endpoint that checks whether the submitting approver matches the policy-assigned approver.
+Any approver who receives a valid approval URL can submit a decision. Policy configuration is the primary access control mechanism: only approvers named in a policy rule will receive notification emails. However, there is no enforcement at the decision endpoint that checks whether the submitting approver matches the policy-assigned approver.
 
 **Implication:** Anyone who obtains a valid approval UUID can submit a decision. The security model relies on keeping approval URLs confidential (delivered only via email to the designated approver).
+
+### RBAC on the Admin API
+
+The Admin REST API (policies, approvers, groups, API keys) uses scope-based access control. Every API key carries a set of scopes, and each endpoint enforces a required scope. See the full scope list in [RBAC and API Key Management](./rbac.md).
+
+Key points:
+
+- API keys are format `dlb_ak_<random>` with 32 bytes of entropy.
+- Keys are hashed (SHA-256) before storage; the raw key is returned once on creation and never again.
+- The `ADMIN_BOOTSTRAP_KEY` env var provides a root credential for initial setup. It is verified directly from the environment, not stored in the database.
+- Predefined roles (`agent`, `readonly`, `operator`, `admin`) simplify key creation. Custom scope lists are also supported.
+- Revoked keys take effect immediately — no TTL or cache delay.
+
+**Production recommendations:**
+
+- Issue agent keys with the `agent` role (`interrupts:write`, `approvals:read`) only. Do not grant `admin` to automated systems.
+- Create separate keys per service so individual keys can be revoked without affecting others.
+- Store the `ADMIN_BOOTSTRAP_KEY` in a secrets manager (AWS Secrets Manager, HashiCorp Vault, Doppler). Treat it as a root database credential.
+- Rotate API keys on personnel change. Use `GET /api-keys` with `last_used_at` to confirm a key is idle before revoking.
+- Add `dlb_ak_` to your secret scanning rules to catch accidental key commits.
 
 ---
 
