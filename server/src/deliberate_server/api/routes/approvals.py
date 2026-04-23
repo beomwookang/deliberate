@@ -74,7 +74,7 @@ class ResumeAckResponse(BaseModel):
 
 @router.get("/{approval_id}/status", response_model=StatusResponse)
 async def get_approval_status(approval_id: uuid.UUID) -> StatusResponse:
-    """Poll for approval status. No auth for M1 — approval_id is the secret."""
+    """Poll for approval status."""
     async with async_session() as session:
         approval = await session.get(Approval, approval_id)
         if approval is None:
@@ -102,7 +102,6 @@ async def get_approval_status(approval_id: uuid.UUID) -> StatusResponse:
         )
 
 
-# TODO(M2): Replace with signed token per PRD §6.6
 @router.get("/{approval_id}/payload", response_model=PayloadResponse)
 async def get_approval_payload(approval_id: uuid.UUID) -> PayloadResponse:
     """Fetch the interrupt payload for rendering the approval UI."""
@@ -216,7 +215,7 @@ async def submit_decision(approval_id: uuid.UUID, body: DecideRequest) -> Decide
         else:
             group_role = "sole_decider"
 
-        # Get prev_hash from the most recent ledger entry for hash chaining (M3b)
+        # Get prev_hash for hash chaining
         prev_entry_result = await session.execute(
             select(LedgerEntryModel.content_hash)
             .order_by(LedgerEntryModel.created_at.desc())
@@ -307,7 +306,7 @@ async def submit_decision(approval_id: uuid.UUID, body: DecideRequest) -> Decide
 
 @router.post("/{approval_id}/resume-ack", response_model=ResumeAckResponse)
 async def resume_ack(approval_id: uuid.UUID, body: ResumeAckRequest) -> ResumeAckResponse:
-    """Acknowledge graph resume. Writes to resume_events (M3b: ledger immutability)."""
+    """Acknowledge graph resume. Writes to resume_events table."""
     async with async_session() as session, session.begin():
         # Find the ledger entry for this approval
         result = await session.execute(
@@ -323,7 +322,7 @@ async def resume_ack(approval_id: uuid.UUID, body: ResumeAckRequest) -> ResumeAc
         if ledger_entry is None:
             raise HTTPException(status_code=404, detail="Ledger entry not found for approval")
 
-        # Write to resume_events instead of mutating ledger content (M3b)
+        # Write to resume_events instead of mutating ledger content
         from deliberate_server.db.models import ResumeEvent
 
         resume_event = ResumeEvent(

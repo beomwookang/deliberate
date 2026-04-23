@@ -96,7 +96,6 @@ class DeliberateClient:
 
     def approval_url(self, approval_id: UUID) -> str:
         """Construct the approval URL for a given approval ID."""
-        # TODO(M2): Replace with signed token per PRD §6.6
         return f"{self.ui_url}/a/{approval_id}"
 
     async def submit_interrupt(

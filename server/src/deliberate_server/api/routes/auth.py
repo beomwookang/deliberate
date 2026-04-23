@@ -1,4 +1,4 @@
-"""Auth endpoints for token verification (M3a)."""
+"""Auth endpoints for token and identity verification."""
 
 from __future__ import annotations
 
@@ -68,7 +68,7 @@ async def request_magic_link(body: MagicLinkRequest) -> MagicLinkResponse:
     }
     token = pyjwt.encode(payload, _jwt_key, algorithm="HS256")
 
-    # TODO(M4): Send email with magic link URL
+    # TODO: Send email with magic link URL in production
     logger.info("Magic link generated for %s (approval %s)", body.email, body.approval_id)
 
     return MagicLinkResponse(

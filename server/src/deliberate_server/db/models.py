@@ -77,7 +77,7 @@ class Approval(Base):
         UUID(as_uuid=True), ForeignKey("approvals.id"), nullable=True
     )
     delegation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)  # Reserved for v1.1+
-    # Approval group fields (M2a: multi-approver support)
+    # Approval group fields (multi-approver support)
     approval_group_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     approval_mode: Mapped[str | None] = mapped_column(Text, nullable=True)  # any_of, all_of
     created_at: Mapped[datetime] = mapped_column(
@@ -157,7 +157,7 @@ class LedgerEntry(Base):
 
 
 class ResumeEvent(Base):
-    """Resume event — separate from ledger to maintain ledger immutability (M3b)."""
+    """Resume event — separate from ledger to maintain immutability."""
 
     __tablename__ = "resume_events"
 

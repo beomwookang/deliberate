@@ -1,4 +1,4 @@
-"""Approval group status endpoint for multi-approver flows (M2a Fix 3).
+"""Approval group status endpoint for multi-approver flows.
 
 GET /approval-groups/{group_id}/status returns the aggregated status:
 - any_of: first decision wins, others marked superseded
@@ -219,8 +219,7 @@ def _aggregate_decisions(
 def _pick_most_restrictive(decisions: list[Decision]) -> Decision:
     """Pick the decision with the smallest numeric value in payload.
 
-    "Most restrictive" for M2a means smallest numeric value.
-    M3 can make this user-configurable per policy.
+    "Most restrictive" means smallest numeric value.
     """
     best = decisions[0]
     best_val = _extract_numeric(best.decision_payload)

@@ -147,7 +147,7 @@ class ResumeRecord(BaseModel):
 
 
 class ApprovalGroupRecord(BaseModel):
-    """Group metadata for multi-approver flows (M2a)."""
+    """Group metadata for multi-approver flows."""
 
     group_id: str | None = None
     role: str | None = None  # "one_of_many" | "sole_decider" | "contributor_to_all_of"
@@ -171,9 +171,9 @@ class LedgerEntry(BaseModel):
     policy_evaluation: PolicyEvaluation
 
     approval: ApprovalRecord | None = None  # NULL if timed_out with no decision
-    approval_group: ApprovalGroupRecord | None = None  # M2a: multi-approver group
+    approval_group: ApprovalGroupRecord | None = None
     escalations: list[EscalationRecord] = Field(default_factory=list)
-    prev_hash: str | None = Field(None, description="Content hash of previous ledger entry (M3b)")
+    prev_hash: str | None = Field(None, description="Content hash of previous ledger entry")
     resume: ResumeRecord | None = None
 
     content_hash: str = Field(..., description="SHA-256 of all preceding fields")

@@ -17,8 +17,6 @@ import DocumentReviewLayout from "../../../components/layouts/document_review";
 import FinancialDecisionLayout from "../../../components/layouts/financial_decision";
 import ProcedureSignoffLayout from "../../../components/layouts/procedure_signoff";
 
-// TODO(M2): Replace with signed token per PRD §6.6
-
 const INTERNAL_API_URL =
   process.env.INTERNAL_API_URL || "http://localhost:4000";
 

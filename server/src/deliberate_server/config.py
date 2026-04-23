@@ -24,13 +24,13 @@ class Settings(BaseSettings):
     server_host: str = "0.0.0.0"
     server_port: int = 4000
 
-    # M1 fallback: single approver from env var (deprecated — use policies)
+    # Deprecated: single approver fallback (use YAML policies instead)
     default_approver_email: str = ""
 
     # UI URL for constructing approval links
     ui_url: str = "http://localhost:3000"
 
-    # Policy engine (M2a)
+    # Policy engine
     approvers_file: str = "config/approvers.yaml"  # DELIBERATE_APPROVERS_FILE
     policies_dir: str = "config/policies"  # DELIBERATE_POLICIES_DIR
     webhooks_file: str = "config/webhooks.yaml"  # DELIBERATE_WEBHOOKS_FILE

@@ -71,7 +71,7 @@ class ResolvedPlan(BaseModel):
     notify_channels: list[Literal["email", "webhook", "slack"]] = Field(default_factory=list)
     require_rationale: bool = False
 
-    # Fields reserved for M2b+:
+    # Optional fields:
     on_timeout: Literal["escalate", "fail"] | None = None
     escalate_to: str | None = None
 

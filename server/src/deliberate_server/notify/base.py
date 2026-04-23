@@ -22,7 +22,7 @@ class NotificationContext(BaseModel):
     subject: str
     approval_url: str  # the /a/{approval_id} URL
     payload_preview: dict[str, object]  # First ~500 chars of key fields
-    expires_at: datetime | None = None  # Reserved for M2b timeout display
+    expires_at: datetime | None = None
 
 
 class NotificationResult(BaseModel):

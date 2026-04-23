@@ -1,7 +1,7 @@
 """Interrupt submission endpoint (PRD §6.2, §6.4 step 2).
 
-M2a: Uses policy engine to evaluate interrupts and resolve approvers.
-Falls back to DEFAULT_APPROVER_EMAIL if no policy matches (M1 compat).
+Uses policy engine to evaluate interrupts and resolve approvers.
+Falls back to DEFAULT_APPROVER_EMAIL if no policy matches (deprecated).
 """
 
 from __future__ import annotations
@@ -179,7 +179,7 @@ async def _handle_auto_approve(
         session.add(interrupt_row)
         await session.flush()
 
-        # Get prev_hash for hash chaining (M3b)
+        # Get prev_hash for hash chaining
         prev_entry_result = await session.execute(
             select(LedgerEntryModel.content_hash)
             .order_by(LedgerEntryModel.created_at.desc())

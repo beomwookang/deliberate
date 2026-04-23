@@ -1,8 +1,6 @@
 """Authentication and token utilities.
 
-JWT approval tokens (HS256): implemented now for M2 readiness.
-API key authentication: used in M1 for SDK-to-server auth.
-HKDF key derivation (M3a): separate keys for JWT, HMAC, and content hashing.
+JWT approval tokens (HS256), API key authentication, and HKDF key derivation.
 """
 
 from __future__ import annotations

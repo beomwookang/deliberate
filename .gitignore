@@ -12,6 +12,7 @@ venv/
 
 # uv
 .python-version
+examples/**/uv.lock
 
 # Node
 node_modules/
