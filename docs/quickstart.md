@@ -99,65 +99,48 @@ For now, leave them as-is. See **Configuration Reference** below if you want to 
 
 ### 5. Run the example agent
 
-The example is a CS response review agent that uses `@approval_gate` to pause and ask for human approval.
+The example is a refund-processing agent that uses `@approval_gate` to pause and require human approval before issuing a refund. This is a classic HITL scenario — the agent has the context and recommendation, but a human must sign off before money moves.
 
 Open a new terminal and run:
 
 ```bash
 cd examples/refund_agent
-uv pip install -e ".[dev]"
-uv run python agent.py
+pip install -e . -e ../../sdk
+python agent.py
 ```
 
 You'll see output like:
 
 ```
-==================================================
-Deliberate — CS 응답 검토 에이전트
-==================================================
-
-고객: 김민지
-문의: 예약한 숙소 체크인 시간을 변경할 수 있나요?
-Thread: 123e4567-e89b-12d3-a456-426614174000
-
-[AI] 응답 초안 생성 완료 (186자)
-[Waiting for approval...]
-Approval URL: http://localhost:3000/a/550e8400-e29b-41d4-a716-446655440000
+INFO:refund_agent:Classifying refund request for customer C-1042
+INFO:refund_agent:Refund $284.50 USD — waiting for human approval
+INFO:deliberate.client:[APPROVAL_URL] http://localhost:3000/a/eyJhbGciOiJI...
 ```
 
 ### 6. Open the approval page
 
-Copy the approval URL from the logs and open it in your browser:
+Copy the approval URL from the logs and open it in your browser. You'll see the `financial_decision` layout with:
 
-```
-http://localhost:3000/a/550e8400-e29b-41d4-a716-446655440000
-```
+- **Amount card** — $284.50 USD, prominently displayed
+- **Customer info** — name, tenure, ID
+- **Agent reasoning** — structured summary with confidence level and supporting points
+- **Evidence table** — support tickets, usage logs, and prior refund history
+- **Decision buttons** — Approve, Approve with change, Request more info, Reject
+- **Rationale chips** — Product Issue, Retention, Policy Exception, Other
 
-You'll see the approval page with:
-- The draft response
-- Customer information
-- Decision buttons (Approve, Reject, Modify, Escalate)
-- Rationale category (why you're approving/rejecting)
-- Notes field (optional comments)
+This is the information architecture a finance lead needs to make a decision in under 30 seconds.
 
 ### 7. Submit a decision
 
-Click **Approve** (or Reject/Modify if you prefer). The agent in your terminal will immediately resume, log the decision, and complete.
-
-You should see:
+Click **Approve** (or any other decision). The agent in your terminal will immediately resume:
 
 ```
-==================================================
-응답 전송 완료!
-  고객: 김민지
-  응답: 안녕하세요 김민지님, ...
-  판정: approve
-  사유: N/A
-==================================================
-
-에이전트 완료.
-최종 판정: approve
+INFO:refund_agent:Approval received: approve
+INFO:refund_agent:Processing refund of $284.50 USD for customer C-1042
+INFO:refund_agent:Refund complete. Ledger entry recorded.
 ```
+
+The decision is now in the append-only audit ledger — who approved, when, why, with what evidence, and how long they took to decide.
 
 Congratulations! You've completed a full approval flow.
 
