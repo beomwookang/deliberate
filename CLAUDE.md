@@ -161,3 +161,50 @@ cd ui && pnpm lint && pnpm typecheck
 - Server: 212 tests (was 206)
 - SDK: 30 tests (was 27)
 - Total: 242 tests, all passing. mypy --strict clean. ruff clean.
+
+### Session 5 — 2026-04-23 — Milestone M3 + M4 complete
+
+#### M3 — What's implemented
+- **M3a — Security and Identity:**
+  - Signed JWT approval tokens wired into URL flow (`/a/{jwt}` with backward compat for raw UUIDs)
+  - New `/auth/verify-approval-token` endpoint + auth router registered in main.py
+  - FOR UPDATE lock on decide endpoint (prevents concurrent double-decide race)
+  - Escalation depth guard (max_escalation_depth=3, follows FK chain, falls back to fail)
+  - HKDF key derivation: 3 separate keys (jwt_key, hmac_key, content_key) from SECRET_KEY via `cryptography` HKDF
+  - Magic link approver identity: POST /auth/magic-link, POST /auth/verify-magic-link, POST /auth/verify-session. DecisionForm shows "Verify Your Identity" gate before decision form.
+
+- **M3b — Ledger and Audit:**
+  - `resume_events` table (migration 0005): resume-ack no longer mutates ledger content JSONB
+  - `prev_hash` column on ledger_entries: hash chain across all 4 creation paths (decision, auto-approve, timeout, escalation)
+  - Enhanced GET /ledger: approver_id, date_from, date_to, q (ILIKE) filters + cursor-based pagination
+  - GET /ledger/export/json and GET /ledger/export/csv with same filters
+  - Unified audit view: decided approvals show full layout + DecisionOverlay instead of generic message
+  - GET /approvals/{id}/payload now returns decision data for decided approvals
+
+- **M3c — Developer Experience:**
+  - DecisionForm uses NEXT_PUBLIC_API_URL or same-origin /api proxy (next.config.js rewrites)
+  - Shared AgentReasoningSection extracted; all 3 layouts deduplicated
+  - CONTRIBUTING.md with dev setup, code style, PR process, architecture overview
+
+#### M4 — What's implemented
+- **Three new layouts:** data_access (resource/scope/risk), content_moderation (flagged items/policy refs), code_deployment (diff/tests/rollback)
+- **Custom layout SDK docs:** docs/custom-layouts.md with step-by-step guide and example
+- **Observability:** prometheus_client with 5 metrics (interrupts, decisions, duration, timeouts, escalations), GET /metrics endpoint, structured logging
+- **Graceful shutdown:** _shutting_down flag, health endpoint returns degraded status
+- **OTLP export:** opentelemetry-sdk integration, emit_ledger_span() on decision and auto-approve paths, disabled by default (env-gated)
+- **Security docs:** docs/security.md with STRIDE threat model, HKDF key management, production recommendations
+- **README updated:** reflects all M1-M4 features, links to docs
+
+#### Key decisions made during M3/M4
+- **HKDF salt=None:** Master key is high-entropy (required SECRET_KEY), so no salt needed per HKDF spec.
+- **Magic link returns token in response (dev mode):** For development/testing convenience. Production should email the link.
+- **Cursor pagination uses base64(JSON{ts,id}):** Stable pagination across concurrent inserts.
+- **resume_events separate from ledger:** Preserves append-only immutability invariant. Operational columns (resume_status, resume_latency_ms) still updated for quick queries.
+- **OTLP lazy-init:** Tracer initialized on first emit_ledger_span call, not at import. No-op if OTEL_EXPORTER_OTLP_ENDPOINT not set.
+- **Prometheus metrics are lightweight counters/histograms:** No per-request tracing overhead.
+- **conftest uses DROP SCHEMA CASCADE + CREATE SCHEMA:** Handles FK dependencies cleanly when adding new tables.
+
+#### Test counts
+- Server: 219 tests
+- SDK: 30 tests
+- Total: 249 tests, all passing. mypy --strict clean. ruff clean. TypeScript clean. ESLint clean.

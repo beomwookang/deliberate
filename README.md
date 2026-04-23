@@ -152,7 +152,7 @@ For automated deploys and infra changes. Leads with diff and blast radius.
 </tr>
 </table>
 
-Need something else? [Build a custom layout](https://deliberate.dev/docs/custom-layouts) — layouts are just React components that consume a typed payload schema.
+Need something else? [Build a custom layout](./docs/custom-layouts.md) — layouts are just React components that consume a typed payload schema.
 
 ---
 
@@ -198,23 +198,31 @@ That layer is Deliberate. Use LangGraph's `interrupt()` anywhere — Deliberate 
 
 ## Project status
 
-Deliberate is **pre-1.0**. The core flow (SDK → server → notifications → approval UI → resume → ledger) works end-to-end, but APIs may change before 1.0. Self-hosting is supported. Managed cloud is not yet available.
+Deliberate is at **v1.0**. The core flow (SDK → server → notifications → approval UI → resume → ledger) works end-to-end. Self-hosting is supported. Managed cloud is not yet available.
 
 ### Shipped
 
 - ✅ LangGraph SDK with `@approval_gate` decorator
 - ✅ Slack, Email, and Webhook notifications
-- ✅ YAML policy routing (Level 1: conditional approvers + timeouts)
-- ✅ Built-in layouts: `financial_decision`, `document_review`, `procedure_signoff`
-- ✅ Audit ledger with JSON export
+- ✅ YAML policy routing (conditional approvers, timeouts, escalation)
+- ✅ Multi-approver support (`any_of` / `all_of` modes)
+- ✅ 6 built-in layouts: `financial_decision`, `document_review`, `procedure_signoff`, `data_access`, `content_moderation`, `code_deployment`
+- ✅ [Custom layout SDK](./docs/custom-layouts.md) — build your own layouts as React components
+- ✅ Append-only audit ledger with hash chain integrity, JSON/CSV export
+- ✅ OTLP export (feeds into Langfuse, Phoenix, or any OTLP-compatible collector)
+- ✅ Signed JWT approval URLs with HKDF key derivation
+- ✅ Magic link approver identity verification
+- ✅ Prometheus metrics (`/metrics` endpoint)
+- ✅ Timeout worker with escalation depth guard
+- ✅ Unified audit view (decided approvals show layout + decision record)
 - ✅ Docker Compose self-hosting
 
-### Next up
+### Documentation
 
-- 🚧 Additional layouts: `data_access`, `content_moderation`, `code_deployment`
-- 🚧 Custom layout SDK (React-based)
-- 🚧 Ledger export to OTLP / Langfuse / Phoenix
-- 🚧 Teams and Telegram notifications
+- [Quickstart Guide](./docs/quickstart.md) — 15-minute install-to-first-approval
+- [Custom Layouts](./docs/custom-layouts.md) — build your own approval layouts
+- [Security & Threat Model](./docs/security.md) — STRIDE analysis, key management, production recommendations
+- [Contributing](./CONTRIBUTING.md) — development setup and PR process
 
 ### Not planned (for now)
 
